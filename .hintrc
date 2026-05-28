@@ -1,0 +1,3 @@
+{
+  "ignoredUrls": ["**/node_modules/**"]
+}
