@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import type { DbCategory } from '../types/database';
 import type { DbProjectItem } from '../types/database';
 import { formatDateTime, wasUpdated } from '../lib/dates';
 import { PricingPreview } from './PricingPreview';
+import EditModal from './EditModal';
+import { pushAdjustLog } from '../lib/audit';
 
 type ItemWithMeta = DbProjectItem & {
   projects?: { name: string } | null;
@@ -21,6 +24,7 @@ type Props = {
     position_number: string;
     unit: string;
     quantity: number;
+    category_id: string;
     materialPrice: number;
     laborPrice: number;
     days: number;
@@ -34,6 +38,7 @@ type Props = {
   onEditFormChange?: (form: any) => void;
   onSave?: () => void;
   onCancel?: () => void;
+  categories?: DbCategory[];
 };
 
 export function PositionCard({
@@ -48,9 +53,13 @@ export function PositionCard({
   onEditFormChange,
   onSave,
   onCancel,
+  categories = [],
 }: Props) {
   const modified = wasUpdated(item.created_at, item.updated_at);
   const [targetTotal, setTargetTotal] = useState('');
+  const [mode, setMode] = useState<'proportional' | 'labor-first' | 'material-first'>('proportional');
+  const [weight, setWeight] = useState(0.7);
+  const [modalOpen, setModalOpen] = useState(false);
 
   return (
     <article className={`position-card ${selected ? 'position-card-selected' : ''}`} onClick={onSelect}>
@@ -80,7 +89,7 @@ export function PositionCard({
 
       {editing && editForm ? (
         <div className="position-card-edit" onClick={(e) => e.stopPropagation()}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 100px', gap: '1rem', marginBottom: '1rem' }}>
+          <div className="edit-form-grid edit-form-grid-top">
             <label className="full-width-field">
               Përshkrimi
               <input type="text" value={editForm.description} onChange={(e) => onEditFormChange?.({ ...editForm, description: e.target.value })} />
@@ -91,7 +100,21 @@ export function PositionCard({
             </label>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="edit-form-section">
+            <label>
+              Kategoria e pozicionit
+              <select value={editForm.category_id} onChange={(e) => onEditFormChange?.({ ...editForm, category_id: e.target.value })}>
+                <option value="">Pa kategori</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="edit-form-grid edit-form-grid-fields">
             <label>
               Njësia
               <select value={editForm.unit} onChange={(e) => onEditFormChange?.({ ...editForm, unit: e.target.value })}>
@@ -146,16 +169,32 @@ export function PositionCard({
               <input type="number" step="0.01" value={editForm.vatPercent} onChange={(e) => onEditFormChange?.({ ...editForm, vatPercent: Number(e.target.value) })} />
             </label>
           </div>
-          <div className="position-card-actions" style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+          <div className="position-card-actions edit-form-actions">
             <button type="button" className="primary-button" onClick={onSave}>Ruaj</button>
             <button type="button" className="card" onClick={onCancel}>Anulo</button>
           </div>
-          <div style={{ marginTop: '1rem' }}>
-            <label>
-              Target total (€)
-              <input type="number" step="0.01" value={targetTotal} onChange={(e) => setTargetTotal(e.target.value)} placeholder="p.sh. 20" />
-            </label>
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+          <div className="edit-form-section">
+            <div className="target-controls">
+              <label style={{ flex: 1 }}>
+                Target total (€)
+                <input type="number" step="0.01" value={targetTotal} onChange={(e) => setTargetTotal(e.target.value)} placeholder="p.sh. 20" />
+              </label>
+              <label>
+                Mode
+                <select value={mode} onChange={(e) => setMode(e.target.value as any)}>
+                  <option value="proportional">Proportional</option>
+                  <option value="labor-first">Labor-first</option>
+                  <option value="material-first">Material-first</option>
+                </select>
+              </label>
+              <label className="weight-control">
+                Weight
+                <input type="range" min={0} max={1} step={0.05} value={weight} onChange={(e) => setWeight(Number(e.target.value))} />
+                <small>{Math.round(weight * 100)}% labor</small>
+              </label>
+            </div>
+
+            <div className="edit-form-actions-inline">
               <button
                 type="button"
                 className="card"
@@ -177,25 +216,58 @@ export function PositionCard({
                   let adjustableNeeded = neededSubtotal - fixedOther;
                   if (adjustableNeeded < 0) adjustableNeeded = 0;
 
+                  let newMaterialPerUnit = Number(editForm.materialPrice) || 0;
+                  let newLaborPerUnit = Number(editForm.laborPrice) || 0;
+
                   const adjustableCurrent = materialTotal + laborTotal;
                   if (adjustableCurrent > 0) {
-                    const scale = adjustableNeeded / adjustableCurrent;
-                    const newMaterialPerUnit = (Number(editForm.materialPrice) || 0) * scale;
-                    const newLaborPerUnit = (Number(editForm.laborPrice) || 0) * scale;
-                    onEditFormChange?.({ ...editForm, materialPrice: Number(newMaterialPerUnit) || 0, laborPrice: Number(newLaborPerUnit) || 0 });
+                    if (mode === 'proportional') {
+                      const scale = adjustableNeeded / adjustableCurrent;
+                      newMaterialPerUnit = (Number(editForm.materialPrice) || 0) * scale;
+                      newLaborPerUnit = (Number(editForm.laborPrice) || 0) * scale;
+                    } else if (mode === 'labor-first') {
+                      // allocate weight to labor first
+                      const laborTargetTotal = adjustableNeeded * weight;
+                      const materialTargetTotal = Math.max(0, adjustableNeeded - laborTargetTotal);
+                      newLaborPerUnit = laborTargetTotal / qty;
+                      newMaterialPerUnit = materialTargetTotal / qty;
+                    } else if (mode === 'material-first') {
+                      const materialTargetTotal = adjustableNeeded * weight;
+                      const laborTargetTotal = Math.max(0, adjustableNeeded - materialTargetTotal);
+                      newMaterialPerUnit = materialTargetTotal / qty;
+                      newLaborPerUnit = laborTargetTotal / qty;
+                    }
                   } else {
                     // fallback: adjust labor only
                     const neededLaborTotal = adjustableNeeded;
-                    const newLaborPerUnit = neededLaborTotal / qty;
-                    onEditFormChange?.({ ...editForm, laborPrice: Number(newLaborPerUnit) || 0 });
+                    newLaborPerUnit = neededLaborTotal / qty;
+                  }
+
+                  const before = { materialPrice: Number(editForm.materialPrice) || 0, laborPrice: Number(editForm.laborPrice) || 0 };
+                  const after = { materialPrice: Number(newMaterialPerUnit) || 0, laborPrice: Number(newLaborPerUnit) || 0 };
+                  onEditFormChange?.({ ...editForm, materialPrice: Number(newMaterialPerUnit) || 0, laborPrice: Number(newLaborPerUnit) || 0 });
+
+                  // audit
+                  try {
+                    pushAdjustLog({
+                      source: 'position',
+                      mode,
+                      weight,
+                      target: target,
+                      before,
+                      after,
+                      timestamp: new Date().toISOString(),
+                    });
+                  } catch (e) {
+                    // ignore
                   }
                 }}
-              >Adjust to target (proportional)</button>
+              >Adjust to target</button>
               <button type="button" className="card" onClick={() => setTargetTotal('')}>Clear</button>
             </div>
           </div>
 
-          <div style={{ marginTop: '1rem' }}>
+          <div className="edit-form-section">
             <PricingPreview
               values={{
                 quantity: Number(editForm.quantity) || 0,

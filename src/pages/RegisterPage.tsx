@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Shell } from '../components/Shell';
 import { PricingPreview } from '../components/PricingPreview';
+import { pushAdjustLog } from '../lib/audit';
 import { TRANSPORT_OPTIONS } from '../constants/transport';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import { useToast } from '../context/ToastContext';
@@ -40,6 +41,8 @@ export function RegisterPage() {
   const [savedResult, setSavedResult] = useState<{ unit: string; qty: number; price: number; total: number } | null>(null);
   const { showToast } = useToast();
   const [targetTotal, setTargetTotal] = useState('');
+  const [mode, setMode] = useState<'proportional' | 'labor-first' | 'material-first'>('proportional');
+  const [weight, setWeight] = useState(0.7);
 
   const watched = watch();
   const projectId = watched.projectId;
@@ -84,12 +87,39 @@ export function RegisterPage() {
     const laborTotal = qty * (Number(watched.laborPrice) || 0);
     const adjustableCurrent = materialTotal + laborTotal;
     if (adjustableCurrent > 0) {
-      const scale = adjustableNeeded / adjustableCurrent;
-      const newMaterialPerUnit = (Number(watched.materialPrice) || 0) * scale;
-      const newLaborPerUnit = (Number(watched.laborPrice) || 0) * scale;
+      let newMaterialPerUnit = (Number(watched.materialPrice) || 0);
+      let newLaborPerUnit = (Number(watched.laborPrice) || 0);
+      if (mode === 'proportional') {
+        const scale = adjustableNeeded / adjustableCurrent;
+        newMaterialPerUnit = (Number(watched.materialPrice) || 0) * scale;
+        newLaborPerUnit = (Number(watched.laborPrice) || 0) * scale;
+      } else if (mode === 'labor-first') {
+        const laborTargetTotal = adjustableNeeded * weight;
+        const materialTargetTotal = Math.max(0, adjustableNeeded - laborTargetTotal);
+        newLaborPerUnit = laborTargetTotal / qty;
+        newMaterialPerUnit = materialTargetTotal / qty;
+      } else if (mode === 'material-first') {
+        const materialTargetTotal = adjustableNeeded * weight;
+        const laborTargetTotal = Math.max(0, adjustableNeeded - materialTargetTotal);
+        newMaterialPerUnit = materialTargetTotal / qty;
+        newLaborPerUnit = laborTargetTotal / qty;
+      }
       setValue('materialPrice', Number(newMaterialPerUnit.toFixed(2)), { shouldDirty: true });
       setValue('laborPrice', Number(newLaborPerUnit.toFixed(2)), { shouldDirty: true });
-      showToast('Materiali dhe puna u rregulluan proporcionalisht për targetin e dhënë.', 'success');
+      showToast('Materiali dhe puna u rregulluan për targetin e dhënë.', 'success');
+
+      // audit
+      try {
+        pushAdjustLog({
+          source: 'register',
+          mode,
+          weight,
+          target,
+          before: { materialPrice: Number(watched.materialPrice) || 0, laborPrice: Number(watched.laborPrice) || 0 },
+          after: { materialPrice: Number(newMaterialPerUnit) || 0, laborPrice: Number(newLaborPerUnit) || 0 },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (e) {}
     } else {
       // fallback: adjust labor only
       const neededLaborTotal = adjustableNeeded;
@@ -97,6 +127,17 @@ export function RegisterPage() {
       const finalLabor = Number(newLaborPerUnit) > 0 ? Number(newLaborPerUnit) : 0;
       setValue('laborPrice', Number(finalLabor.toFixed(2)), { shouldDirty: true });
       showToast('Puna u rregullua për targetin e dhënë (fallback).', 'success');
+      try {
+        pushAdjustLog({
+          source: 'register',
+          mode,
+          weight,
+          target,
+          before: { materialPrice: Number(watched.materialPrice) || 0, laborPrice: Number(watched.laborPrice) || 0 },
+          after: { materialPrice: Number(watched.materialPrice) || 0, laborPrice: Number(finalLabor) || 0 },
+          timestamp: new Date().toISOString(),
+        });
+      } catch (e) {}
     }
   };
 
@@ -117,6 +158,16 @@ export function RegisterPage() {
   }, [location, setValue]);
 
   const onSubmit = async (values: RegisterFormValues) => {
+    // basic validation
+    if (!values.description || String(values.description).trim() === '') {
+      showToast('Vendosni një përshkrim për pozicionin.', 'error');
+      return;
+    }
+    if (!values.quantity || Number(values.quantity) <= 0) {
+      showToast('Sasia duhet të jetë më e madhe se 0.', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const result = await saveRegisterRow(values);
@@ -287,15 +338,33 @@ export function RegisterPage() {
         </button>
       </form>
 
-      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '1rem' }}>
-        <input
-          placeholder="Target total (€)"
-          value={targetTotal}
-          onChange={(e) => setTargetTotal(e.target.value)}
-          style={{ width: 140 }}
-        />
-        <button type="button" className="card" onClick={() => adjustLaborToTarget()}>Adjust to target</button>
-        <button type="button" className="card" onClick={() => { setTargetTotal(''); }}>Clear</button>
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+        <label style={{ flex: 1 }}>
+          Target total (€)
+          <input
+            placeholder="Target total (€)"
+            value={targetTotal}
+            onChange={(e) => setTargetTotal(e.target.value)}
+            style={{ width: 140 }}
+          />
+        </label>
+        <label>
+          Mode
+          <select value={mode} onChange={(e) => setMode(e.target.value as any)}>
+            <option value="proportional">Proportional</option>
+            <option value="labor-first">Labor-first</option>
+            <option value="material-first">Material-first</option>
+          </select>
+        </label>
+        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          Weight
+          <input type="range" min={0} max={1} step={0.05} value={weight} onChange={(e) => setWeight(Number(e.target.value))} />
+          <small>{Math.round(weight * 100)}% labor</small>
+        </label>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button type="button" className="card" onClick={() => adjustLaborToTarget()}>Adjust to target</button>
+          <button type="button" className="card" onClick={() => { setTargetTotal(''); }}>Clear</button>
+        </div>
       </div>
       
       <div style={{ marginTop: '1rem' }}>

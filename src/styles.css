@@ -260,6 +260,9 @@ input:focus, select:focus {
 .import-label-select { flex: 1; min-width: 200px; }
 .import-label-input { flex: 1; min-width: 200px; }
 .import-file-input { padding: 10px; }
+.import-meta-panel { display: grid; gap: 14px; padding: 16px; border-radius: 18px; background: var(--surface-alt); border: 1px solid var(--border); }
+.import-meta-panel-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+.import-meta-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .import-table-container { margin-top: 10px; overflow-x: auto; }
 .import-table { width: 100%; margin-top: 12px; border-collapse: collapse; text-align: left; }
 .import-table-head-row { border-bottom: 1px solid var(--border); }
@@ -267,6 +270,106 @@ input:focus, select:focus {
 .import-table-body-row { border-bottom: 1px solid var(--border); }
 .import-table-more { padding: 8px; }
 .import-actions { display: flex; gap: 12px; margin-top: 16px; }
+.import-preview-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.import-preview-toolbar { margin-bottom: 12px; }
+.view-switch { display: flex; gap: 8px; }
+.libri-preview-stack { display: grid; gap: 14px; }
+.libri-preview-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-alt);
+}
+.libri-preview-summary > div { display: grid; gap: 2px; }
+.libri-preview-summary strong { font-size: 1.1rem; color: var(--primary); }
+.libri-preview-note { padding: 0 4px; }
+.libri-preview-ok,
+.libri-preview-warning {
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+.libri-preview-ok { background: rgba(16, 185, 129, 0.08); color: var(--primary); }
+.libri-preview-warning { background: rgba(248, 113, 113, 0.08); color: #b91c1c; display: grid; gap: 6px; }
+.libri-preview-grid { display: grid; gap: 18px; }
+.libri-a4-page {
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 8mm 8mm 10mm;
+  border: 1px solid #7f7f7f;
+  border-radius: 0;
+  background: #fff;
+  color: #111827;
+  box-shadow: none;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  font-family: Calibri, 'Segoe UI', Arial, sans-serif;
+  font-size: 11px;
+}
+.libri-a4-header { display: grid; gap: 10px; }
+.libri-a4-header-top { display: flex; justify-content: space-between; gap: 14px; align-items: start; }
+.libri-a4-kicker { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: #4b5563; }
+.libri-a4-title { display: block; font-size: 16px; line-height: 1.1; color: #111827; margin-top: 2px; font-weight: 700; }
+.libri-a4-subtitle { margin-top: 4px; font-size: 11px; color: #374151; }
+.libri-a4-meta-box { display: grid; gap: 4px; min-width: 188px; padding: 8px 10px; border: 1px solid #7f7f7f; border-radius: 0; background: rgba(255, 255, 255, 0.96); }
+.libri-a4-meta-box div { display: flex; justify-content: space-between; gap: 10px; font-size: 10.5px; border-bottom: 1px solid #d9d9d9; padding-bottom: 2px; }
+.libri-a4-meta-box div:last-child { border-bottom: 0; padding-bottom: 0; }
+.libri-a4-meta-box span { color: #4b5563; }
+.libri-a4-meta-box strong { color: #111827; }
+.libri-a4-header-line { border-top: 1px solid #111827; opacity: 1; margin-top: 2px; }
+.libri-a4-body { display: grid; gap: 10px; }
+.libri-a4-page-info { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 10.5px; color: #374151; }
+.libri-a4-table { border: 1px solid #111827; border-radius: 0; overflow: hidden; background: rgba(255, 255, 255, 0.95); }
+.libri-a4-table-head {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 70px 78px 82px 82px;
+  gap: 0;
+  background: #fafafa;
+  border-bottom: 1px solid #111827;
+  font-size: 10px;
+  font-weight: 800;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+.libri-a4-table-head span { padding: 6px 7px; border-right: 1px solid #111827; }
+.libri-a4-table-head span:last-child { border-right: 0; }
+.libri-a4-table-body { display: grid; }
+.libri-a4-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 70px 78px 82px 82px;
+  border-bottom: 1px solid #bfbfbf;
+  font-size: 11px;
+}
+.libri-a4-row:last-child { border-bottom: 0; }
+.libri-a4-row > div { padding: 6px 7px; border-right: 1px solid #bfbfbf; }
+.libri-a4-row > div:last-child { border-right: 0; }
+.libri-a4-pos-cell { display: grid; gap: 2px; align-content: start; }
+.libri-kind { display: inline-flex; width: fit-content; padding: 1px 5px; border-radius: 0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0; border: 1px solid #111827; background: #fff; color: #111827; }
+.libri-kind-numra,
+.libri-kind-romake,
+.libri-kind-shkronja,
+.libri-kind-tjeter { background: #fff; color: #111827; }
+.libri-a4-desc-cell { line-height: 1.22; white-space: normal; word-break: break-word; }
+.libri-a4-unit-cell, .libri-a4-number-cell { display: flex; align-items: start; }
+.libri-a4-number-cell { justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.libri-a4-total-cell { font-weight: 800; }
+.libri-a4-footer { display: grid; gap: 8px; padding-top: 2px; }
+.libri-a4-signature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.libri-a4-signature-block { display: grid; gap: 18px; }
+.libri-a4-signature-block span { font-size: 10px; color: #374151; }
+.libri-a4-signature-line { border-bottom: 1px solid #111827; min-height: 16px; }
+.libri-a4-footer-note { display: flex; justify-content: space-between; gap: 12px; font-size: 10px; color: #4b5563; }
+.libri-page-debug { font-size: 10px; padding-left: 2px; color: #6b7280; }
 .import-undo-toast {
   margin-top: 12px;
   padding: 10px;
@@ -322,6 +425,100 @@ input:focus, select:focus {
 }
 
 .pricing-preview { margin-top: 0; }
+.edit-modal-backdrop { position: fixed; inset: 0; background: rgba(1, 15, 11, 0.72); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(8px); }
+.edit-modal-shell { width: min(1100px, 100%); max-height: 92vh; overflow: auto; background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%); border: 1px solid var(--border); border-radius: 24px; box-shadow: var(--shadow); padding: 18px; }
+.edit-modal-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+.edit-form-grid { display: grid; gap: 14px; }
+.edit-form-grid-top { grid-template-columns: minmax(0, 1fr) 110px; }
+.edit-form-grid-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.edit-form-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.edit-form-actions { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.edit-form-actions-inline { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.target-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: end; }
+.weight-control { display: grid; gap: 8px; align-content: end; }
+
+@media (max-width: 980px) {
+  .import-meta-grid,
+  .libri-preview-summary,
+  .libri-a4-signature-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .libri-a4-header-top,
+  .target-controls {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}
+
+@media (max-width: 720px) {
+  .import-meta-grid,
+  .libri-preview-summary,
+  .libri-a4-signature-grid,
+  .edit-form-grid-fields,
+  .edit-form-grid-top {
+    grid-template-columns: 1fr;
+  }
+
+  .libri-a4-table-head,
+  .libri-a4-row {
+    grid-template-columns: 74px minmax(0, 1fr) 56px 60px 68px 68px;
+  }
+
+  .libri-a4-page {
+    padding: 10mm 7mm 8mm;
+  }
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .shell,
+  .app-shell {
+    max-width: none;
+    padding: 0;
+    background: #fff;
+  }
+
+  .sidebar,
+  .page-header,
+  .import-controls,
+  .import-meta-panel,
+  .import-actions,
+  .import-preview-head,
+  .import-preview-note,
+  .import-undo-toast,
+  .view-switch,
+  .muted,
+  .link-button,
+  .edit-modal-backdrop {
+    display: none !important;
+  }
+
+  .libri-a4-page {
+    width: 210mm;
+    height: 297mm;
+    max-width: none;
+    min-height: 297mm;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .libri-a4-footer-note {
+    color: #000;
+  }
+
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+}
 
 .formula-list {
   margin: 0;

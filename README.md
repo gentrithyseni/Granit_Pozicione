@@ -47,6 +47,7 @@ Hap `http://localhost:5173` — hyr me email/fjalëkalim në `/login`.
 | `npm run dev` | Server zhvillimi |
 | `npm run build` | Build prod (`dist/`) |
 | `npm run preview` | Preview i build-it |
+| `npm run export:libri-pages` | Krijon `output/libri-pages.html` dhe `output/libri-pages.json` |
 
 ## Struktura e projektit
 
@@ -77,3 +78,7 @@ database-schema.sql     # Skema PostgreSQL
 ## Shënim sigurie
 
 Mos commit-o `.env`. Çelësi `anon` është publik në frontend; mbrojtja vjen nga **Auth + RLS**, jo nga fshehja e key-it.
+
+## Export i faqeve
+
+Skriptet e librit i ruajnë faqet në folderin [`output/`](output) si HTML të printueshëm për A4.

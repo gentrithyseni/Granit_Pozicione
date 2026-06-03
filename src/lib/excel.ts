@@ -7,17 +7,183 @@ export type ParsedRow = {
   quantity: number;
   unit_price: number;
   total_price: number;
+  sheet_name?: string;
+  issues?: string[];
 };
 
-// Heqim theksat dhe e kthejmë në lowercase për një krahasim më të lehtë
 function normalizeString(str: string): string {
   if (!str) return '';
   return str
     .toString()
     .toLowerCase()
-    .normalize("NFD")
+    .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
+}
+
+function toCellText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+function rowText(row: unknown[]): string {
+  return row.map(toCellText).filter(Boolean).join(' | ');
+}
+
+function isEmptyRow(row: unknown[]): boolean {
+  return row.every((cell) => toCellText(cell) === '');
+}
+
+function isSignatureRow(row: unknown[]): boolean {
+  const text = normalizeString(rowText(row));
+  return text.includes('kryesi i pun') || text.includes('organi mbikqyr') || text.includes('signature');
+}
+
+function isStructuredHeaderRow(row: unknown[]): boolean {
+  const first = normalizeString(toCellText(row[0]));
+  const second = normalizeString(toCellText(row[1]));
+  const third = normalizeString(toCellText(row[2]));
+  const fourth = normalizeString(toCellText(row[3]));
+  const fifth = normalizeString(toCellText(row[4]));
+  const sixth = normalizeString(toCellText(row[5]));
+
+  return (
+    first === 'pos' &&
+    second.includes('pershkrimi i pozicionit') &&
+    third.includes('njesia') &&
+    fourth.includes('sasia') &&
+    fifth.includes('cmimi') &&
+    (sixth.includes('shuma') || sixth.includes('gjithsej'))
+  );
+}
+
+function extractPositionNumber(text: string): string {
+  const match = String(text || '').match(/^\s*([0-9]+(?:\.[0-9]+)*)\b/);
+  return match ? match[1] : '';
+}
+
+function parseNumeric(value: unknown): number {
+  if (typeof value === 'number') return value;
+  const parsed = Number(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] {
+  const parsed: ParsedRow[] = [];
+  let active = false;
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index] || [];
+
+    if (isStructuredHeaderRow(row)) {
+      active = true;
+      continue;
+    }
+
+    if (!active) continue;
+    if (isSignatureRow(row)) break;
+    if (isEmptyRow(row)) continue;
+
+    const positionNumber = extractPositionNumber(toCellText(row[0]));
+    const description = toCellText(row[1]);
+    if (!positionNumber || !description || normalizeString(description).startsWith('gjithsejt')) {
+      continue;
+    }
+
+    const quantity = parseNumeric(row[3]);
+    const unitPrice = parseNumeric(row[4]);
+    const explicitTotal = parseNumeric(row[5]);
+    const totalPrice = explicitTotal || quantity * unitPrice;
+
+    parsed.push({
+      position_number: positionNumber,
+      description,
+      unit: toCellText(row[2]),
+      quantity,
+      unit_price: unitPrice,
+      total_price: totalPrice,
+      sheet_name: sheetName,
+      issues: [],
+    });
+  }
+
+  return parsed;
+}
+
+function parseLegacyRows(rows: unknown[][], sheetName: string): ParsedRow[] {
+  const parsed: ParsedRow[] = [];
+  let headerMap: Record<string, number> | null = null;
+
+  for (const row of rows) {
+    if (!headerMap) {
+      const tempMap: Record<string, number> = {};
+      let matchCount = 0;
+
+      row.forEach((cell, key) => {
+        const val = normalizeString(toCellText(cell));
+        if (val.includes('nr') || val.includes('numri') || val === 'pos' || val.includes('poz')) {
+          tempMap.position = Number(key);
+          matchCount += 1;
+        } else if (val.includes('pershkrim') || val.includes('emertimi') || val.includes('punet')) {
+          tempMap.description = Number(key);
+          matchCount += 1;
+        } else if (val.includes('njesi')) {
+          tempMap.unit = Number(key);
+          matchCount += 1;
+        } else if (val.includes('sasi')) {
+          tempMap.quantity = Number(key);
+          matchCount += 1;
+        } else if (val.includes('cmim') && !val.includes('total')) {
+          tempMap.price = Number(key);
+          matchCount += 1;
+        }
+      });
+
+      if (matchCount >= 3) {
+        headerMap = tempMap;
+      }
+      continue;
+    }
+
+    const description = toCellText(row[headerMap.description as number]);
+    if (!description || normalizeString(description).startsWith('gjithsejt')) continue;
+
+    const quantity = parseNumeric(row[headerMap.quantity as number]);
+    const unitPrice = parseNumeric(row[headerMap.price as number]);
+    if (quantity <= 0) continue;
+
+    const positionNumber = toCellText(row[headerMap.position as number] ?? '');
+    parsed.push({
+      position_number: positionNumber,
+      description,
+      unit: toCellText(row[headerMap.unit as number] ?? 'copë'),
+      quantity,
+      unit_price: unitPrice,
+      total_price: quantity * unitPrice,
+      sheet_name: sheetName,
+      issues: [],
+    });
+  }
+
+  return parsed;
+}
+
+function parseWorkbook(workbook: XLSX.WorkBook): ParsedRow[] {
+  const rows: ParsedRow[] = [];
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const worksheet = workbook.Sheets[sheetName];
+    const jsonData = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: null });
+    const structuredRows = parseStructuredRows(jsonData, sheetName);
+    if (structuredRows.length > 0) {
+      rows.push(...structuredRows);
+      return;
+    }
+
+    rows.push(...parseLegacyRows(jsonData, sheetName));
+  });
+
+  return rows;
 }
 
 export async function parseExcel(file: File): Promise<ParsedRow[]> {
@@ -28,115 +194,7 @@ export async function parseExcel(file: File): Promise<ParsedRow[]> {
       try {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'array' });
-        
-        // Marrim fletën e parë punuese
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        
-        // E kthejmë në format JSON (array of arrays)
-        const jsonData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
-        
-        const parsedRows: ParsedRow[] = [];
-        let headerMap: Record<string, number> | null = null;
-
-        for (const row of jsonData) {
-          // Kontrollojmë nëse ky rresht i ngjan një header-i
-          if (!headerMap) {
-            const tempMap: Record<string, number> = {};
-            let matchCount = 0;
-            
-            // Kërkojmë për kolonat kryesore bazuar në fjalë kyçe
-            Object.keys(row).forEach((key) => {
-              const val = normalizeString((row as any)[key]);
-              if (val.includes('nr') || val.includes('numri') || val.includes('poz') || val === 'pos' || val.includes('pos')) {
-                tempMap['position'] = Number(key); matchCount++;
-              } else if (val.includes('pershkrim') || val.includes('emertimi') || val.includes('punet')) {
-                tempMap['description'] = Number(key); matchCount++;
-              } else if (val.includes('njesi') || val.includes('njesia')) {
-                tempMap['unit'] = Number(key); matchCount++;
-              } else if (val.includes('sasi') || val.includes('sasia')) {
-                tempMap['quantity'] = Number(key); matchCount++;
-              } else if (val.includes('cmim') && !val.includes('total')) {
-                tempMap['price'] = Number(key); matchCount++;
-              }
-            });
-
-            // Nëse i gjejmë të paktën 3 nga kolonat, e konsiderojmë header
-            if (matchCount >= 3) {
-              headerMap = tempMap;
-            }
-            continue; // Kalojmë në rreshtin tjetër pasi gjetëm headerin
-          }
-
-          // Nëse kemi gjetur header-in, fillojmë të lexojmë të dhënat
-          if (headerMap) {
-            const desc = row[headerMap['description'] as any];
-            
-            // Injorojmë rreshtat totalisht pa përshkrim ose empty
-            if (!desc || typeof desc !== 'string' || desc.trim() === '') continue;
-
-            // Pastrojmë dhe kthejmë vlerat në numra
-            const qtyRaw = row[headerMap['quantity'] as any];
-            const priceRaw = row[headerMap['price'] as any];
-            
-            const quantity = parseFloat(qtyRaw) || 0;
-            const unit_price = parseFloat(priceRaw) || 0;
-
-            // Injorojmë rreshtat (që shpesh janë tituj seksionesh) që s'janë pozicione me sasi (qty = 0)
-            if (quantity === 0) continue;
-
-            parsedRows.push({
-              position_number: String(row[headerMap['position'] as any] || ''),
-              description: desc.trim(),
-              unit: String(row[headerMap['unit'] as any] || 'copë'),
-              quantity: quantity,
-              unit_price: unit_price,
-              total_price: quantity * unit_price
-            });
-          }
-        }
-        // If we couldn't parse any rows with the array-based header detection above,
-        // try a fallback using object-mode parsing (use first row as header keys)
-        if (parsedRows.length === 0) {
-          try {
-            const objData = XLSX.utils.sheet_to_json<any>(worksheet, { defval: '' });
-            if (objData && objData.length > 0) {
-              // Normalize header names
-              const headerKeys = Object.keys(objData[0]);
-              const keyMap: Record<string, string> = {};
-              headerKeys.forEach((h) => {
-                const nh = normalizeString(h);
-                if (nh.includes('nr') || nh.includes('numri') || nh.includes('poz')) keyMap['position'] = h;
-                else if (nh.includes('pershkrim') || nh.includes('emertimi') || nh.includes('punet') || nh.includes('desc')) keyMap['description'] = h;
-                else if (nh.includes('njesi') || nh.includes('njesia') || nh.includes('unit')) keyMap['unit'] = h;
-                else if (nh.includes('sasi') || nh.includes('sasia') || nh.includes('qty')) keyMap['quantity'] = h;
-                else if (nh.includes('cmim') && !nh.includes('total') || nh.includes('price') || nh.includes('çmim')) keyMap['price'] = h;
-              });
-
-              for (const r of objData) {
-                const desc = r[keyMap['description'] as any] || r[headerKeys[1]];
-                const qtyRaw = r[keyMap['quantity'] as any] ?? r[headerKeys[3]];
-                const priceRaw = r[keyMap['price'] as any] ?? r[headerKeys[4]];
-                const quantity = parseFloat(String(qtyRaw)) || 0;
-                const unit_price = parseFloat(String(priceRaw)) || 0;
-                if (!desc || String(desc).trim() === '') continue;
-                if (quantity === 0) continue;
-                parsedRows.push({
-                  position_number: String(r[keyMap['position'] as any] || ''),
-                  description: String(desc).trim(),
-                  unit: String(r[keyMap['unit'] as any] || ''),
-                  quantity,
-                  unit_price,
-                  total_price: quantity * unit_price
-                });
-              }
-            }
-          } catch (err) {
-            // fallback failed, continue with empty result
-          }
-        }
-
-        resolve(parsedRows);
+        resolve(parseWorkbook(workbook));
       } catch (error) {
         reject(error);
       }

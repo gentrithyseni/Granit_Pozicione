@@ -35,6 +35,7 @@ export function DataPage() {
     position_number: '',
     unit: '',
     quantity: 0,
+    category_id: '',
     materialPrice: 0,
     laborPrice: 0,
     days: 0,
@@ -204,6 +205,7 @@ export function DataPage() {
       position_number: item.position_number || '',
       unit: item.unit || '',
       quantity: Number(item.quantity) || 0,
+      category_id: item.category_id || '',
       materialPrice,
       laborPrice,
       days,
@@ -244,6 +246,7 @@ export function DataPage() {
         position_number: editForm.position_number,
         unit: editForm.unit,
         quantity: quantity,
+        category_id: editForm.category_id || null,
         unit_price: unitPrice,
         total_price: total,
         updated_at: now,
@@ -313,6 +316,7 @@ export function DataPage() {
           onEditFormChange={setEditForm}
           onSave={saveRowEdit}
           onCancel={() => setEditingId(null)}
+          categories={categoriesList}
         />
       ))}
     </div>

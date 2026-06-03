@@ -4,13 +4,17 @@
   "private": true,
   "scripts": {
     "dev": "vite",
+    "test": "vitest",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" \"App.tsx\""
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"App.tsx\"",
+    "parse:libri": "node scripts/parse_libri_xlsx.js",
+    "export:libri-pages": "node scripts/export_libri_pages.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
     "date-fns": "^4.3.0",
+    "exceljs": "^4.4.0",
     "lucide-react": "^0.539.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -20,10 +24,12 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/node": "^20.4.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "typescript": "^5.8.3",
-    "vite": "^6.4.2"
+    "vite": "^6.4.2",
+    "vitest": "^1.2.0"
   }
 }
