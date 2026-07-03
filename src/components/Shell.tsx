@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { MoonStar, SunMedium } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
-import { BookOpen } from 'lucide-react';
 
 export function Shell({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme();
@@ -21,7 +20,6 @@ export function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/data">Të dhënat</NavLink>
           <NavLink to="/search">Kërko</NavLink>
           <NavLink to="/profile">Profili</NavLink>
-          <NavLink to="/construction-book">Libri Ndërtimor</NavLink>
         </nav>
         <button type="button" className="card theme-toggle-btn" onClick={toggleTheme} aria-label="Ndërro temën">
           {theme === 'light' ? <MoonStar size={18} /> : <SunMedium size={18} />} {theme === 'light' ? 'Dark' : 'Light'}

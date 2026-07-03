@@ -11,7 +11,6 @@ import { DataPage } from './src/pages/DataPage';
 import { SearchPage } from './src/pages/SearchPage';
 import { ProfilePage } from './src/pages/ProfilePage';
 import { LoginPage } from './src/pages/LoginPage';
-import ConstructionBookPage from "./src/pages/ConstructionBookPage";
 
 export default function App() {
   return (
@@ -70,7 +69,6 @@ export default function App() {
               }
             />
             <Route path="*" element={<Navigate to="/" replace />} />
-            <Route path="/construction-book" element={<ConstructionBookPage />} />
           </Routes>
         </BrowserRouter>
         </ToastProvider>

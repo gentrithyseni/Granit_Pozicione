@@ -7,9 +7,7 @@
     "test": "vitest",
     "build": "tsc -p tsconfig.json && vite build",
     "preview": "vite preview",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" \"App.tsx\"",
-    "parse:libri": "node scripts/parse_libri_xlsx.js",
-    "export:libri-pages": "node scripts/export_libri_pages.js"
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"App.tsx\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
