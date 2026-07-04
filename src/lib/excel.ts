@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { isLibriNdertimorSheet, parseLibriSheet, type LibriMeasurementLine, type LibriMeta } from './libriNdertimor';
 
 export type ParsedRow = {
   position_number: string;
@@ -9,6 +10,11 @@ export type ParsedRow = {
   total_price: number;
   sheet_name?: string;
   issues?: string[];
+  /** I pranishëm vetëm kur rreshti vjen nga formati "Libri Ndërtimor" (Shablloni-Faqe). */
+  measurements?: LibriMeasurementLine[];
+  /** Meta i librit ndërtimor (kryesi, muaji, objekti, seksioni...) kur burimi është ai format. */
+  libriMeta?: LibriMeta;
+  source?: 'paramasa' | 'libri';
 };
 
 function normalizeString(str: string): string {
@@ -168,19 +174,44 @@ function parseLegacyRows(rows: unknown[][], sheetName: string): ParsedRow[] {
   return parsed;
 }
 
+function libriPositionsToRows(sheetName: string, meta: LibriMeta, positions: ReturnType<typeof parseLibriSheet>['positions']): ParsedRow[] {
+  return positions.map((position) => ({
+    position_number: position.positionNumber,
+    description: position.description,
+    unit: position.unit,
+    quantity: position.quantity,
+    unit_price: 0,
+    total_price: 0,
+    sheet_name: sheetName,
+    issues: ['Nga Libri Ndërtimor: çmimi nuk vjen nga ky skedar, duhet plotësuar/kombinuar manualisht.'],
+    measurements: position.measurements,
+    libriMeta: meta,
+    source: 'libri',
+  }));
+}
+
 function parseWorkbook(workbook: XLSX.WorkBook): ParsedRow[] {
   const rows: ParsedRow[] = [];
 
   workbook.SheetNames.forEach((sheetName) => {
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: null });
+
+    if (isLibriNdertimorSheet(jsonData)) {
+      const { meta, positions } = parseLibriSheet(jsonData, sheetName);
+      if (positions.length > 0) {
+        rows.push(...libriPositionsToRows(sheetName, meta, positions).map((row) => ({ ...row, source: 'libri' as const })));
+        return;
+      }
+    }
+
     const structuredRows = parseStructuredRows(jsonData, sheetName);
     if (structuredRows.length > 0) {
-      rows.push(...structuredRows);
+      rows.push(...structuredRows.map((row) => ({ ...row, source: 'paramasa' as const })));
       return;
     }
 
-    rows.push(...parseLegacyRows(jsonData, sheetName));
+    rows.push(...parseLegacyRows(jsonData, sheetName).map((row) => ({ ...row, source: 'paramasa' as const })));
   });
 
   return rows;

@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import { parseExcel, type ParsedRow } from '../lib/excel';
 import { PARAMASA_TEMPLATES, type ParamasaTemplateMode } from '../lib/paramasaPreview';
 import { buildParamasaFinalHtml } from '../lib/paramasaExport';
+import { buildLibriNdertimorWorkbook, downloadWorkbookBuffer, planLibriExport } from '../lib/libriExport';
 import { supabase } from '../lib/supabase';
 import type { DbProject } from '../types/database';
 
@@ -53,6 +54,7 @@ export function ImportPage() {
   const [fileName, setFileName] = useState('');
   const [previewMode, setPreviewMode] = useState<'table' | 'preview' | 'final'>('preview');
   const [templateMode, setTemplateMode] = useState<ParamasaTemplateMode>('auto');
+  const [libriExportLoading, setLibriExportLoading] = useState(false);
   const [previewMeta, setPreviewMeta] = useState<ParamasaPreviewMeta>({
     executorName: '',
     month: '',
@@ -170,6 +172,26 @@ export function ImportPage() {
     link.download = `${normalizeBaseName(fileName) || 'Paramasa'}-final.html`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 500);
+  };
+
+  const handleDownloadLibriNdertimor = async () => {
+    if (rows.length === 0) return;
+    setLibriExportLoading(true);
+    try {
+      const plan = planLibriExport(rows);
+      const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta);
+      downloadWorkbookBuffer(buffer, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
+      const overflowPages = plan.filter((page) => page.overflowWarning).length;
+      if (overflowPages > 0) {
+        showToast(`Skedari u shkarkua. ${overflowPages} faqe kanë përshkrime të gjata — kontrolloji manualisht.`, 'info');
+      } else {
+        showToast(`Skedari u shkarkua: ${plan.length} faqe në formatin origjinal.`, 'success');
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gabim gjatë gjenerimit të Librit Ndërtimor.', 'error');
+    } finally {
+      setLibriExportLoading(false);
+    }
   };
 
   const handleAutoSuggestMeta = () => {
@@ -331,6 +353,9 @@ export function ImportPage() {
               <button className="primary-button import-save-btn" type="button" onClick={handleSave} disabled={loading}>Aprovo dhe Shto Pozicionet</button>
               <button className="card import-cancel-btn" type="button" onClick={handlePrint} disabled={loading || rows.length === 0}>Print</button>
               <button className="card import-cancel-btn" type="button" onClick={handleDownloadFinal} disabled={loading || rows.length === 0}>Download Final</button>
+              <button className="card import-cancel-btn" type="button" onClick={handleDownloadLibriNdertimor} disabled={loading || libriExportLoading || rows.length === 0}>
+                {libriExportLoading ? 'Duke gjeneruar…' : 'Shkarko Libër Ndërtimor (.xlsx origjinal)'}
+              </button>
               <button className="card import-cancel-btn" type="button" onClick={() => setRows([])} disabled={loading}>Anulo</button>
             </div>
           </div>
