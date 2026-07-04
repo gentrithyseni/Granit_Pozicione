@@ -301,6 +301,17 @@ input:focus, select:focus {
   font-weight: 700;
 }
 .paramasa-row-list { display: grid; gap: 10px; }
+.paramasa-page-download-btn { justify-self: start; }
+.paramasa-overflow-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff3cd;
+  color: #7a5b00;
+  font-size: 0.82rem;
+}
 .paramasa-row {
   display: grid;
   gap: 6px;

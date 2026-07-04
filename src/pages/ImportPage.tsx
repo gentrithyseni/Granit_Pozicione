@@ -3,8 +3,6 @@ import { ParamasaPreview, type ParamasaPreviewMeta } from '../components/Paramas
 import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
 import { parseExcel, type ParsedRow } from '../lib/excel';
-import { PARAMASA_TEMPLATES, type ParamasaTemplateMode } from '../lib/paramasaPreview';
-import { buildParamasaFinalHtml } from '../lib/paramasaExport';
 import { buildLibriNdertimorWorkbook, downloadWorkbookBuffer, planLibriExport } from '../lib/libriExport';
 import { supabase } from '../lib/supabase';
 import type { DbProject } from '../types/database';
@@ -52,8 +50,7 @@ export function ImportPage() {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
-  const [previewMode, setPreviewMode] = useState<'table' | 'preview' | 'final'>('preview');
-  const [templateMode, setTemplateMode] = useState<ParamasaTemplateMode>('auto');
+  const [previewMode, setPreviewMode] = useState<'table' | 'preview'>('preview');
   const [libriExportLoading, setLibriExportLoading] = useState(false);
   const [previewMeta, setPreviewMeta] = useState<ParamasaPreviewMeta>({
     executorName: '',
@@ -160,18 +157,6 @@ export function ImportPage() {
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleDownloadFinal = () => {
-    if (rows.length === 0) return;
-    const finalHtml = buildParamasaFinalHtml(rows, previewMeta, templateMode);
-    const blob = new Blob([finalHtml], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${normalizeBaseName(fileName) || 'Paramasa'}-final.html`;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 500);
   };
 
   const handleDownloadLibriNdertimor = async () => {
@@ -281,9 +266,6 @@ export function ImportPage() {
               <button type="button" className={`filter-chip ${previewMode === 'preview' ? 'active' : ''}`} onClick={() => setPreviewMode('preview')}>
                 Preview
               </button>
-              <button type="button" className={`filter-chip ${previewMode === 'final' ? 'active' : ''}`} onClick={() => setPreviewMode('final')}>
-                Final
-              </button>
               <button type="button" className={`filter-chip ${previewMode === 'table' ? 'active' : ''}`} onClick={() => setPreviewMode('table')}>
                 Tabelë
               </button>
@@ -295,24 +277,14 @@ export function ImportPage() {
 
         {rows.length > 0 && !loading && (
           <div className="import-preview import-table-container">
-            {previewMode === 'preview' || previewMode === 'final' ? (
+            {previewMode === 'preview' ? (
               <>
                 <div className="import-preview-head import-preview-toolbar">
                   <strong>U analizuan {rows.length} pozicione.</strong>
-                  <label className="import-label-select template-select-inline">
-                    Shablloni
-                    <select value={templateMode} onChange={(e) => setTemplateMode(e.target.value as ParamasaTemplateMode)}>
-                      <option value="auto">Auto</option>
-                      {PARAMASA_TEMPLATES.map((template) => (
-                        <option key={template.id} value={template.id}>
-                          {template.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <span className="muted">Faqet paketohen automatikisht (auto) — motori i sigurt që s'i përzien seksionet.</span>
                 </div>
 
-                <ParamasaPreview rows={rows} templateMode={templateMode} meta={previewMeta} viewMode={previewMode === 'final' ? 'final' : 'preview'} />
+                <ParamasaPreview rows={rows} meta={previewMeta} />
               </>
             ) : (
               <>
@@ -352,7 +324,6 @@ export function ImportPage() {
             <div className="import-actions">
               <button className="primary-button import-save-btn" type="button" onClick={handleSave} disabled={loading}>Aprovo dhe Shto Pozicionet</button>
               <button className="card import-cancel-btn" type="button" onClick={handlePrint} disabled={loading || rows.length === 0}>Print</button>
-              <button className="card import-cancel-btn" type="button" onClick={handleDownloadFinal} disabled={loading || rows.length === 0}>Download Final</button>
               <button className="card import-cancel-btn" type="button" onClick={handleDownloadLibriNdertimor} disabled={loading || libriExportLoading || rows.length === 0}>
                 {libriExportLoading ? 'Duke gjeneruar…' : 'Shkarko Libër Ndërtimor (.xlsx origjinal)'}
               </button>

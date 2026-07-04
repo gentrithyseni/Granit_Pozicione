@@ -8,7 +8,7 @@
 
 import ExcelJS from 'exceljs';
 import type { ParsedRow } from './excel';
-import type { ParamasaPreviewMeta } from '../components/ParamasaPreview';
+import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 import { groupRowsBySection } from './paramasaPreview';
 import { packSectionIntoPages, TEMPLATE_SLOTS, type TemplateId, type LibriPage } from './libriPaging';
 
@@ -166,8 +166,6 @@ export async function buildLibriNdertimorWorkbook(
   for (let pageIndex = 0; pageIndex < plan.length; pageIndex += 1) {
     const page = plan[pageIndex];
     const templateSheet = await getTemplateSheet(page.templateId);
-    const slots = TEMPLATE_SLOTS[page.templateId];
-    const positions = buildLibriExportPositions(page.rows);
 
     let sheetName = sanitizeSheetName(`${pageIndex + 1}. ${page.sectionLabel}`);
     let suffix = 1;
@@ -178,45 +176,70 @@ export async function buildLibriNdertimorWorkbook(
     usedNames.add(sheetName);
 
     const ws = cloneWorksheet(output, templateSheet, sheetName);
-
-    // fushat fikse, njësoj në të gjitha shabllonet
-    setCell(ws, FIXED_CELLS.month.row, FIXED_CELLS.month.col, `Muaji-Month ${meta.month || ''}`.trim());
-    setCell(ws, FIXED_CELLS.executor.row, FIXED_CELLS.executor.col, `Kryerësi i punëve "${meta.executorName || ''}" `);
-    setCell(ws, FIXED_CELLS.object.row, FIXED_CELLS.object.col, `Objekti-Building : ${meta.objectName || ''}`);
-
-    // fushat e header-it të seksionit (rreshtat ndryshojnë sipas shabllonit, prandaj vijnë nga TEMPLATE_SLOTS)
-    const headerSlot = slots[0];
-    const offerPositionsList = positions.map((p) => p.positionNumber).filter(Boolean).join(', ');
-    setCell(ws, headerSlot.sectionAccountRow, 6, `  No ${page.sectionLabel.replace(/\.$/, '')}`);
-    setCell(ws, headerSlot.sectionPositionsRow, 8, `   No  ${offerPositionsList || meta.offerPositions || ''}`);
-    setCell(ws, headerSlot.sectionTitleRow, 1, meta.sectionTitle || page.sectionLabel);
-
-    // njësia matëse e faqes (garantuar e njëjtë për të gjitha pozicionet e faqes nga packSectionIntoPages)
-    setCell(ws, FIXED_CELLS.unit.row, FIXED_CELLS.unit.col, `      Masa         ${positions[0]?.unit || ''}`);
-
-    positions.forEach((position, slotIndex) => {
-      const slot = slots[slotIndex];
-      if (!slot) return;
-
-      setCell(
-        ws,
-        slot.descRow,
-        1,
-        `${position.positionNumber ? `${position.positionNumber} ` : ''}${position.description || ''}`
-      );
-
-      const lines = position.lines;
-      lines.forEach((line, lineIndex) => {
-        const rowNumber = slot.measureRow + lineIndex;
-        setCell(ws, rowNumber, 5, line.label);
-        setCell(ws, rowNumber, 6, line.value);
-      });
-
-      const totalRow = slot.measureRow + lines.length;
-      setCell(ws, totalRow, 5, 'Gjithsejt :');
-      setCell(ws, totalRow, 8, position.total);
-    });
+    fillPageIntoWorksheet(ws, page, meta);
   }
+
+  const buffer = await output.xlsx.writeBuffer();
+  return buffer as ArrayBuffer;
+}
+
+/** Mbush një fletë tashmë të klonuar me të dhënat e një faqeje të vetme (ndarë nga logjika e sipërme, e ripërdorur edhe për shkarkimin e një faqeje të vetme). */
+function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage, meta: ParamasaPreviewMeta): void {
+  const slots = TEMPLATE_SLOTS[page.templateId];
+  const positions = buildLibriExportPositions(page.rows);
+
+  setCell(ws, FIXED_CELLS.month.row, FIXED_CELLS.month.col, `Muaji-Month ${meta.month || ''}`.trim());
+  setCell(ws, FIXED_CELLS.executor.row, FIXED_CELLS.executor.col, `Kryerësi i punëve "${meta.executorName || ''}" `);
+  setCell(ws, FIXED_CELLS.object.row, FIXED_CELLS.object.col, `Objekti-Building : ${meta.objectName || ''}`);
+
+  const headerSlot = slots[0];
+  const offerPositionsList = positions.map((p) => p.positionNumber).filter(Boolean).join(', ');
+  setCell(ws, headerSlot.sectionAccountRow, 6, `  No ${page.sectionLabel.replace(/\.$/, '')}`);
+  setCell(ws, headerSlot.sectionPositionsRow, 8, `   No  ${offerPositionsList || meta.offerPositions || ''}`);
+  setCell(ws, headerSlot.sectionTitleRow, 1, meta.sectionTitle || page.sectionLabel);
+  setCell(ws, FIXED_CELLS.unit.row, FIXED_CELLS.unit.col, `      Masa         ${positions[0]?.unit || ''}`);
+
+  positions.forEach((position, slotIndex) => {
+    const slot = slots[slotIndex];
+    if (!slot) return;
+
+    setCell(
+      ws,
+      slot.descRow,
+      1,
+      `${position.positionNumber ? `${position.positionNumber} ` : ''}${position.description || ''}`
+    );
+
+    const lines = position.lines;
+    lines.forEach((line, lineIndex) => {
+      const rowNumber = slot.measureRow + lineIndex;
+      setCell(ws, rowNumber, 5, line.label);
+      setCell(ws, rowNumber, 6, line.value);
+    });
+
+    const totalRow = slot.measureRow + lines.length;
+    setCell(ws, totalRow, 5, 'Gjithsejt :');
+    setCell(ws, totalRow, 8, position.total);
+  });
+}
+
+/** Gjeneron një workbook me VETËM NJË faqe — për shkarkim individual të një faqeje të librit. */
+export async function buildLibriSinglePageWorkbook(
+  page: LibriExportPlanPage,
+  meta: ParamasaPreviewMeta,
+  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook
+): Promise<ArrayBuffer> {
+  const templateWorkbook = await templateLoader(page.templateId);
+  const templateSheet = templateWorkbook.worksheets[0];
+  if (!templateSheet) throw new Error(`Shablloni ${page.templateId} nuk ka asnjë fletë.`);
+
+  const output = new ExcelJS.Workbook();
+  output.creator = 'Graniti Web';
+  output.created = new Date();
+
+  const sheetName = sanitizeSheetName(page.sectionLabel || 'Faqja');
+  const ws = cloneWorksheet(output, templateSheet, sheetName);
+  fillPageIntoWorksheet(ws, page, meta);
 
   const buffer = await output.xlsx.writeBuffer();
   return buffer as ArrayBuffer;
