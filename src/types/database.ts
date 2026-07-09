@@ -52,3 +52,19 @@ export type SearchResultItem = DbProjectItem & {
   projects?: { name: string } | null;
   categories?: { name: string } | null;
 };
+
+export type DbPriceHistory = {
+  id: string;
+  project_item_id?: string | null;
+  project_id?: string | null;
+  category_id?: string | null;
+  description?: string | null;
+  unit?: string | null;
+  material_price: number;
+  labor_price: number;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  profit_percent: number;
+  recorded_at: string;
+};

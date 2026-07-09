@@ -167,8 +167,12 @@ export function ImportPage() {
       const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta);
       downloadWorkbookBuffer(buffer, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
       const overflowPages = plan.filter((page) => page.overflowWarning).length;
-      if (overflowPages > 0) {
-        showToast(`Skedari u shkarkua. ${overflowPages} faqe kanë përshkrime të gjata — kontrolloji manualisht.`, 'info');
+      const mixedPages = plan.filter((page) => page.mixedUnitsWarning).length;
+      if (overflowPages > 0 || mixedPages > 0) {
+        const parts: string[] = [];
+        if (overflowPages > 0) parts.push(`${overflowPages} me përshkrim të gjatë`);
+        if (mixedPages > 0) parts.push(`${mixedPages} me njësi të përziera`);
+        showToast(`Skedari u shkarkua (${plan.length} faqe). Kontrollo: ${parts.join(', ')}.`, 'info');
       } else {
         showToast(`Skedari u shkarkua: ${plan.length} faqe në formatin origjinal.`, 'success');
       }
@@ -196,13 +200,13 @@ export function ImportPage() {
     <Shell>
       <div className="page-header">
         <h1>Ngarko Excel</h1>
-        <p className="muted">Ngarko Excel-in, lejo sugjerimin automatik të metadata-s, dhe kalo nga preview në final për pamjen e plotë.</p>
+        <p className="muted">Ngarko Excel-in, lejo sugjerimin automatik të te dhenave, dhe kalo nga preview në final për pamjen e plotë.</p>
       </div>
 
       <div className="panel import-panel">
         <div className="import-meta-panel">
           <div className="import-meta-panel-head">
-            <strong>Metadata e paramasës</strong>
+            <strong>Te dhenat e paramasës</strong>
             <span className="muted">Sugjerohen automatikisht nga sistemi, pastaj mund t'i ndryshosh manualisht.</span>
           </div>
           <div className="form-grid import-meta-grid">

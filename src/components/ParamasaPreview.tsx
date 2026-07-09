@@ -108,6 +108,7 @@ export function ParamasaPreview({ rows, meta }: Props) {
               <div className="paramasa-template-note muted">
                 Shablloni-{page.templateId}-Faqe · {page.rows.length} pozicione në faqe
                 {page.overflowWarning ? ' · ⚠ përshkrim i gjatë, kontrollo faqen' : ''}
+                {page.mixedUnitsWarning ? ' · ⚠ njësi të përziera në faqe' : ''}
               </div>
 
               <div className="paramasa-row-list">

@@ -11,6 +11,8 @@ import { exportProjectCSV } from '../services/export';
 import { fetchCategorySummaries } from '../services/insights';
 import { ensureDefaultCategories, groupItemsByProject } from '../services/categories';
 import { updateProject } from '../services/projects';
+import { recordPriceSnapshot } from '../services/priceHistory';
+import { PriceHistoryDashboard } from '../components/PriceHistoryDashboard';
 import type { CategorySummary, DbCategory, DbProject, DbProjectItem, ItemWithMeta } from '../types/database';
 
 const ITEM_SELECT = '*, projects(name), categories(name)';
@@ -36,6 +38,7 @@ export function DataPage() {
     unit: '',
     quantity: 0,
     category_id: '',
+    project_id: '',
     materialPrice: 0,
     laborPrice: 0,
     days: 0,
@@ -206,6 +209,7 @@ export function DataPage() {
       unit: item.unit || '',
       quantity: Number(item.quantity) || 0,
       category_id: item.category_id || '',
+      project_id: item.project_id || '',
       materialPrice,
       laborPrice,
       days,
@@ -268,6 +272,22 @@ export function DataPage() {
       { project_item_id: editingId, expense_type: 'other', description: 'Tjera', unit_cost: otherTotal, quantity: 1, total_cost: otherTotal },
     ]);
 
+    // Historiku i çmimeve: shto NJË REKORD TË RI (s'e fshin/mbishkruan historinë e mëparshme),
+    // që të mund të shihet si ka ndryshuar çmimi i këtij pozicioni me kohë.
+    await recordPriceSnapshot({
+      project_item_id: editingId,
+      project_id: editForm.project_id || null,
+      category_id: editForm.category_id || null,
+      description: editForm.description,
+      unit: editForm.unit,
+      material_price: Number(editForm.materialPrice) || 0,
+      labor_price: Number(editForm.laborPrice) || 0,
+      quantity,
+      unit_price: unitPrice,
+      total_price: total,
+      profit_percent: Number(editForm.profitPercent) || 0,
+    });
+
     setEditingId(null);
     showToast('Pozicioni u përditësua.', 'success');
     if (selectedProject) await loadProjectDetails(selectedProject);
@@ -322,6 +342,7 @@ export function DataPage() {
     </div>
   );
 
+
   return (
     <Shell>
       <div className="page-header">
@@ -332,78 +353,84 @@ export function DataPage() {
         </p>
       </div>
 
-      <ComparePositions
-        items={comparePool}
-        slotA={compareA}
-        slotB={compareB}
-        onSlotA={setCompareA}
-        onSlotB={setCompareB}
-      />
-
-      <div className="data-grid">
-        <div className="panel">
-          <h3 className="panel-title">Projektet (ofertat)</h3>
-          <div className="status-filter-row">
-            <button type="button" className={`filter-chip ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>
-              Të gjitha
-            </button>
-            {PROJECT_STATUSES.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                className={`filter-chip ${statusFilter === s.value ? 'active' : ''}`}
-                onClick={() => setStatusFilter(s.value)}
-              >
-                {s.label}
+      <div className="data-layout">
+        <div className="data-main">
+          <section className="panel form-section">
+            <h3 className="panel-title">1. Projektet (ofertat)</h3>
+            <div className="status-filter-row">
+              <button type="button" className={`filter-chip ${statusFilter === 'all' ? 'active' : ''}`} onClick={() => setStatusFilter('all')}>
+                Të gjitha
               </button>
-            ))}
-          </div>
-          <label>
-            Kërko projekte
-            <input value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} placeholder="Qkuk, Polici..." />
-          </label>
-          <div className="projects-list">
-            {filteredProjects.map((project) => (
-              <button
-                key={project.id}
-                type="button"
-                className={`project-item ${selectedProject?.id === project.id ? 'selected' : ''}`}
-                onClick={() => loadProjectDetails(project)}
-              >
-                <strong>{project.name}</strong>
-                <span className="project-item-meta">
-                  {project.client || 'Pa klient'} · <StatusBadge status={project.status} />
-                </span>
-              </button>
-            ))}
-            {filteredProjects.length === 0 && <span className="muted">Nuk ka projekte.</span>}
-          </div>
-        </div>
-
-        <div className="panel">
-          <h3 className="panel-title">Kategoritë</h3>
-          <p className="muted category-hint">Kliko Pllaka, Ujë… — shfaqen ofertat nga të gjithë projektet + krahasim mes projekteve.</p>
-          <div className="category-wrap">
-            {categoriesList.map((category) => {
-              const summary = categorySummaries.find((s) => s.id === category.id);
-              return (
+              {PROJECT_STATUSES.map((s) => (
                 <button
-                  key={category.id}
+                  key={s.value}
                   type="button"
-                  className={`chip-button ${selectedCategory?.id === category.id ? 'chip-selected' : ''}`}
-                  onClick={() => loadCategoryDetails(category)}
+                  className={`filter-chip ${statusFilter === s.value ? 'active' : ''}`}
+                  onClick={() => setStatusFilter(s.value)}
                 >
-                  {category.name}
-                  {summary && summary.count > 0 ? ` (${summary.count})` : ''}
+                  {s.label}
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+            <label>
+              Kërko projekte
+              <input value={projectFilter} onChange={(e) => setProjectFilter(e.target.value)} placeholder="Qkuk, Polici..." />
+            </label>
+            <div className="projects-list">
+              {filteredProjects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  className={`project-item ${selectedProject?.id === project.id ? 'selected' : ''}`}
+                  onClick={() => loadProjectDetails(project)}
+                >
+                  <strong>{project.name}</strong>
+                  <span className="project-item-meta">
+                    {project.client || 'Pa klient'} · <StatusBadge status={project.status} />
+                  </span>
+                </button>
+              ))}
+              {filteredProjects.length === 0 && <span className="muted">Nuk ka projekte.</span>}
+            </div>
+          </section>
+
+          <section className="panel form-section">
+            <h3 className="panel-title">2. Kategoritë</h3>
+            <p className="muted category-hint">Kliko Pllaka, Ujë… — shfaqen ofertat nga të gjithë projektet + krahasim mes projekteve.</p>
+            <div className="category-wrap">
+              {categoriesList.map((category) => {
+                const summary = categorySummaries.find((s) => s.id === category.id);
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    className={`chip-button ${selectedCategory?.id === category.id ? 'chip-selected' : ''}`}
+                    onClick={() => loadCategoryDetails(category)}
+                  >
+                    {category.name}
+                    {summary && summary.count > 0 ? ` (${summary.count})` : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         </div>
+
+        <aside className="data-sidebar">
+          <ComparePositions
+            items={comparePool}
+            slotA={compareA}
+            slotB={compareB}
+            onSlotA={setCompareA}
+            onSlotB={setCompareB}
+          />
+        </aside>
       </div>
 
+      <PriceHistoryDashboard categories={categoriesList} />
+
       {selectedProject && (
-        <div className="panel panel-top-gap">
+        <section className="panel panel-top-gap">
           <h3 className="panel-heading-accent">Oferta: {selectedProject.name}</h3>
 
           <div className="project-meta-panel">
@@ -423,8 +450,10 @@ export function DataPage() {
               Përshkrimi
               <input value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} />
             </label>
-            <button type="button" className="primary-button" onClick={saveProjectMeta}>Ruaj projektin</button>
-            <button type="button" className="card" onClick={analyzeSelectedProject}>Kontrollo projektin</button>
+            <div className="form-actions-row">
+              <button type="button" className="primary-button" onClick={saveProjectMeta}>Ruaj projektin</button>
+              <button type="button" className="card" onClick={analyzeSelectedProject}>Kontrollo projektin</button>
+            </div>
           </div>
 
           <div className="project-controls">
@@ -437,7 +466,7 @@ export function DataPage() {
 
           {filterProjectItems.length > 0 ? renderPositionList(filterProjectItems) : <p className="muted">Ska pozicione në këtë projekt.</p>}
           {projectAnalysis && (
-            <div className="panel" style={{ marginTop: '1rem' }}>
+            <div className="panel data-analysis-panel">
               <h4 className="panel-title">Analizë e shpejtë</h4>
               <ul>
                 {projectAnalysis.map((s, i) => (
@@ -446,11 +475,11 @@ export function DataPage() {
               </ul>
             </div>
           )}
-        </div>
+        </section>
       )}
 
       {selectedCategory && (
-        <div className="panel panel-top-gap">
+        <section className="panel panel-top-gap">
           <h3 className="panel-heading-accent">
             Kategoria: {selectedCategory.name} — {categoryItems.length} pozicione, {categoryGroups.length} projekte
           </h3>
@@ -472,7 +501,7 @@ export function DataPage() {
           ) : (
             <p className="muted">Ska pozicione për këtë kategori ende.</p>
           )}
-        </div>
+        </section>
       )}
     </Shell>
   );

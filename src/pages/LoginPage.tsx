@@ -47,7 +47,7 @@ export function LoginPage() {
       <div className="auth-card card">
         <div className="eyebrow accent">Graniti</div>
         <h1>Hyrje në panel</h1>
-        <p className="muted">Përdor email dhe fjalëkalimin e krijuar në Supabase Auth.</p>
+        <p className="muted">Shkruaj email dhe password.</p>
         <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
           <label>
             Email

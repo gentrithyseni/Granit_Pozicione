@@ -35,7 +35,7 @@ export function PricingPreview({ values, unit }: { values: PricingInput; unit?: 
           {b.transportTotal.toFixed(2)} + {b.otherTotal.toFixed(2)} = <strong>{b.subtotal.toFixed(2)} €</strong>
         </p>
         <p>
-          Fitimi ({values.profitPercent}%) = {b.subtotal.toFixed(2)} × {values.profitPercent}% ={' '}
+          Fitimi +- ({values.profitPercent}%) = {b.subtotal.toFixed(2)} × {values.profitPercent}% ={' '}
           <strong>{b.profitAmount.toFixed(2)} €</strong>
         </p>
         <p>

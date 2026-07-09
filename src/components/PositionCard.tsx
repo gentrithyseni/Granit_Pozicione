@@ -121,11 +121,11 @@ export function PositionCard({
                 <option value="m2">m²</option>
                 <option value="m3">m³</option>
                 <option value="m'">m'</option>
-                <option value="cop'">Cop'</option>
+                <option value="copë">Copë</option>
                 <option value="komplet">Komplet</option>
                 <option value="paushall">Paushall</option>
                 <option value="kg">kg</option>
-                <option value="lit�r">Lit�r</option>
+                <option value="litër">Litër</option>
               </select>
             </label>
             <label>
@@ -182,13 +182,13 @@ export function PositionCard({
               <label>
                 Mode
                 <select value={mode} onChange={(e) => setMode(e.target.value as any)}>
-                  <option value="proportional">Proportional</option>
-                  <option value="labor-first">Labor-first</option>
-                  <option value="material-first">Material-first</option>
+                  <option value="proportional">Proporcionale</option>
+                  <option value="labor-first">Puna me rëndësi</option>
+                  <option value="material-first">Materiali me rëndësi</option>
                 </select>
               </label>
               <label className="weight-control">
-                Weight
+                Pesha 
                 <input type="range" min={0} max={1} step={0.05} value={weight} onChange={(e) => setWeight(Number(e.target.value))} />
                 <small>{Math.round(weight * 100)}% labor</small>
               </label>
@@ -262,7 +262,7 @@ export function PositionCard({
                     // ignore
                   }
                 }}
-              >Adjust to target</button>
+              >Përafroju objektivit te çmimit</button>
               <button type="button" className="card" onClick={() => setTargetTotal('')}>Clear</button>
             </div>
           </div>

@@ -45,8 +45,24 @@ async function loadTemplateWorkbook(templateId: TemplateId): Promise<ExcelJS.Wor
 
 /** Klonon një fletë burimore (me stile, bashkime qelizash, gjerësi/lartësi) brenda workbook-ut të destinacionit. */
 function cloneWorksheet(target: ExcelJS.Workbook, source: ExcelJS.Worksheet, name: string): ExcelJS.Worksheet {
+  const lastRow = source.dimensions?.bottom || source.rowCount;
+  const lastCol = source.dimensions?.right || source.columnCount || 8;
+  const lastColLetter = String.fromCharCode(64 + lastCol);
+
   const clone = target.addWorksheet(name, {
-    pageSetup: { ...source.pageSetup },
+    pageSetup: {
+      ...source.pageSetup,
+      // Shabllonet origjinale përdorin vetëm "scale: 92%" fiks, jo "fit to page". Kjo
+      // funksiononte për një skedar të vetëm, statik — por meqë tani përmbajtja (përshkrimi)
+      // ndryshon gjatësi sipas paramasës, duhet të detyrojmë "1 faqe e gjerë x 1 faqe e lartë",
+      // përndryshe rreshti i nënshkrimeve ("Kryesi i punëve / Organi mbikëqyrës") mund të
+      // shtyhet automatikisht në faqen e dytë kur printohet, në vend që të qëndrojë në fund
+      // të faqes A4 së parë.
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 1,
+      printArea: `A1:${lastColLetter}${lastRow}`,
+    },
     properties: { ...source.properties },
     views: source.views?.map((v) => ({ ...v })),
   });
@@ -55,18 +71,12 @@ function cloneWorksheet(target: ExcelJS.Workbook, source: ExcelJS.Worksheet, nam
     width: (column as ExcelJS.Column).width,
   }));
 
-  source.eachRow({ includeEmpty: true }, (sourceRow, rowNumber) => {
-    const targetRow = clone.getRow(rowNumber);
-    targetRow.height = sourceRow.height;
-    sourceRow.eachCell({ includeEmpty: true }, (sourceCell, colNumber) => {
-      const targetCell = targetRow.getCell(colNumber);
-      targetCell.value = sourceCell.value;
-      if (sourceCell.style) targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
-      if (sourceCell.numFmt) targetCell.numFmt = sourceCell.numFmt;
-    });
-    targetRow.commit();
-  });
-
+  // RADHA KA RËNDËSI: bashkimi i qelizave (merge) bëhet PARA se t'u vendosim stilet, sepse
+  // ExcelJS mund t'ua rivendosë stilin qelizave "skllave" të një range-i të bashkuar kur thirret
+  // mergeCells (duke e trashëguar stilin nga qeliza "master", jo domosdoshmërisht identik me atë
+  // që kishin origjinalisht). Nëse e bëjmë merge PARA, kopjimi i stilit që vjen pas e "vulos"
+  // stilin e saktë origjinal mbi çdo qelizë — përfshirë kufijtë (borders) e anës së djathtë,
+  // që përndryshe humbisnin (rregullim i raportuar nga përdoruesi: drejtkëndëshi dilte pa vijë djathtas).
   const merges = (source.model as unknown as { merges?: string[] }).merges || [];
   merges.forEach((range) => {
     try {
@@ -74,6 +84,20 @@ function cloneWorksheet(target: ExcelJS.Workbook, source: ExcelJS.Worksheet, nam
     } catch {
       // range i pavlefshëm/i dublikuar — injorohet, nuk ndalon eksportin
     }
+  });
+
+  source.eachRow({ includeEmpty: true }, (sourceRow, rowNumber) => {
+    const targetRow = clone.getRow(rowNumber);
+    targetRow.height = sourceRow.height;
+    targetRow.hidden = sourceRow.hidden;
+    targetRow.outlineLevel = sourceRow.outlineLevel;
+    sourceRow.eachCell({ includeEmpty: true }, (sourceCell, colNumber) => {
+      const targetCell = targetRow.getCell(colNumber);
+      targetCell.value = sourceCell.value;
+      if (sourceCell.style) targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
+      if (sourceCell.numFmt) targetCell.numFmt = sourceCell.numFmt;
+    });
+    targetRow.commit();
   });
 
   return clone;
@@ -120,6 +144,7 @@ export type LibriExportPlanPage = {
   sectionLabel: string;
   rows: ParsedRow[];
   overflowWarning: boolean;
+  mixedUnitsWarning: boolean;
 };
 
 /** Planifikimi (pa gjeneruar akoma xlsx) — i dobishëm për ta shfaqur në UI para shkarkimit. */
@@ -129,7 +154,13 @@ export function planLibriExport(rows: ParsedRow[]): LibriExportPlanPage[] {
   sections.forEach((section) => {
     const pages: LibriPage[] = packSectionIntoPages(section.rows);
     pages.forEach((page) => {
-      plan.push({ templateId: page.templateId, sectionLabel: section.sectionLabel, rows: page.rows, overflowWarning: page.overflowWarning });
+      plan.push({
+        templateId: page.templateId,
+        sectionLabel: section.sectionLabel,
+        rows: page.rows,
+        overflowWarning: page.overflowWarning,
+        mixedUnitsWarning: page.mixedUnitsWarning,
+      });
     });
   });
   return plan;
@@ -197,7 +228,10 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
   setCell(ws, headerSlot.sectionAccountRow, 6, `  No ${page.sectionLabel.replace(/\.$/, '')}`);
   setCell(ws, headerSlot.sectionPositionsRow, 8, `   No  ${offerPositionsList || meta.offerPositions || ''}`);
   setCell(ws, headerSlot.sectionTitleRow, 1, meta.sectionTitle || page.sectionLabel);
-  setCell(ws, FIXED_CELLS.unit.row, FIXED_CELLS.unit.col, `      Masa         ${positions[0]?.unit || ''}`);
+
+  const distinctUnits = Array.from(new Set(positions.map((p) => p.unit).filter(Boolean)));
+  const unitLabel = distinctUnits.length > 1 ? distinctUnits.join(' / ') : positions[0]?.unit || '';
+  setCell(ws, FIXED_CELLS.unit.row, FIXED_CELLS.unit.col, `      Masa         ${unitLabel}`);
 
   positions.forEach((position, slotIndex) => {
     const slot = slots[slotIndex];

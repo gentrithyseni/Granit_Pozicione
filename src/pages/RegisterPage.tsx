@@ -27,7 +27,7 @@ export function RegisterPage() {
       laborPrice: 0,
       days: 1,
       foodPrice: 0,
-      location: 'Ferizaj',
+      location: 'Prishtinë',
       transportPrice: 10,
       otherPrice: 0,
       profitPercent: 0,
@@ -193,11 +193,10 @@ export function RegisterPage() {
         </p>
       </div>
 
-      
 
       {savedResult && (
-        <div className="panel">
-          <h3 className="panel-title">U ruajt</h3>
+        <div className="panel register-saved-panel">
+          <h3 className="panel-title">✓ U ruajt me sukses</h3>
           <table className="import-table">
             <thead>
               <tr className="import-table-head-row">
@@ -219,156 +218,181 @@ export function RegisterPage() {
         </div>
       )}
 
-      <form className="panel form-grid" onSubmit={handleSubmit(onSubmit)}>
-        <label>
-          Projekti
-          <select {...register('projectId')}>
-            <option value="">-- Zgjidh Projektin --</option>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>{project.name}</option>
-            ))}
-            <option value="NEW">+ Krijo Projekt të ri...</option>
-          </select>
-        </label>
-        {projectId === 'NEW' && (
-          <>
-            <label>Emri i Projektit të Ri<input {...register('newProjectName')} placeholder="Shkruaj emrin..." /></label>
-            <label>Klienti<input {...register('newProjectClient')} placeholder="Emri i klientit" /></label>
-            <label>
-              Statusi
-              <select {...register('newProjectStatus')}>
-                {PROJECT_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </label>
-          </>
-        )}
+      <div className="register-layout">
+        <form className="register-main" onSubmit={handleSubmit(onSubmit)}>
+          <section className="panel form-section">
+            <h3 className="panel-title">1. Projekti &amp; Kategoria</h3>
+            <div className="form-grid">
+              <label>
+                Projekti
+                <select {...register('projectId')}>
+                  <option value="">-- Zgjidh Projektin --</option>
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.name}</option>
+                  ))}
+                  <option value="NEW">+ Krijo Projekt të ri...</option>
+                </select>
+              </label>
+              {projectId === 'NEW' && (
+                <>
+                  <label>Emri i Projektit të Ri<input {...register('newProjectName')} placeholder="Shkruaj emrin..." /></label>
+                  <label>Klienti<input {...register('newProjectClient')} placeholder="Emri i klientit" /></label>
+                  <label>
+                    Statusi
+                    <select {...register('newProjectStatus')}>
+                      {PROJECT_STATUSES.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
 
-        <label>
-          Kategoria
-          <select {...register('categoryId')}>
-            <option value="">-- Zgjidh Kategorinë --</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>{category.name}</option>
-            ))}
-            <option value="NEW">+ Kategori e re (emër tjetër)...</option>
-          </select>
-          <span className="field-hint">Zgjidh Pllaka, Ujë, Sanitari… — të gjitha pozicionet e së njëjtës kategorie grupohen tek Të dhënat.</span>
-        </label>
-        {categoryId === 'NEW' && (
-          <label>
-            Emri i Kategorisë së Re
-            <input {...register('newCategoryName')} placeholder="Vetëm nëse nuk është në listë" />
-          </label>
-        )}
+              <label>
+                Kategoria
+                <select {...register('categoryId')}>
+                  <option value="">-- Zgjidh Kategorinë --</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>{category.name}</option>
+                  ))}
+                  <option value="NEW">+ Kategori e re (emër tjetër)...</option>
+                </select>
+                <span className="field-hint">Zgjidh Pllaka, Ujë, Sanitari… — të gjitha pozicionet e së njëjtës kategori grupohen tek Të dhënat.</span>
+              </label>
+              {categoryId === 'NEW' && (
+                <label>
+                  Emri i Kategorisë së Re
+                  <input {...register('newCategoryName')} placeholder="Vetëm nëse nuk është në listë" />
+                </label>
+              )}
+            </div>
+          </section>
 
-        <label className="full-width-field">
-          Përshkrimi i punës
-          <input {...register('description')} placeholder="p.sh. Shtrim pllaka 60x60 në banjo" />
-        </label>
-        <label>
-          Njësia
-          <select {...register('unit')}>
-            <option value="m2">m²</option>
-            <option value="m3">m³</option>
-            <option value="m'">m'</option>
-            <option value="copë">Copë</option>
-            <option value="komplet">Komplet</option>
-            <option value="paushall">Paushall</option>
-            <option value="kg">kg</option>
-            <option value="litër">Litër</option>
-          </select>
-        </label>
-        <label>
-          Sasia
-          <input type="number" step="0.01" {...register('quantity', { valueAsNumber: true })} />
-          <span className="field-hint">P.sh. 45 m² — përdoret për material & puna.</span>
-        </label>
+          <section className="panel form-section">
+            <h3 className="panel-title">2. Përshkrimi i punës</h3>
+            <div className="form-grid">
+              <label className="full-width-field">
+                Përshkrimi i punës
+                <input {...register('description')} placeholder="p.sh. Shtrim pllaka 60x60 në banjo" />
+              </label>
+              <label>
+                Njësia
+                <select {...register('unit')}>
+                  <option value="m2">m²</option>
+                  <option value="m3">m³</option>
+                  <option value="m'">m'</option>
+                  <option value="copë">Copë</option>
+                  <option value="komplet">Komplet</option>
+                  <option value="paushall">Paushall</option>
+                  <option value="kg">kg</option>
+                  <option value="litër">Litër</option>
+                </select>
+              </label>
+              <label>
+                Sasia
+                <input type="number" step="0.01" {...register('quantity', { valueAsNumber: true })} />
+                <span className="field-hint">P.sh. 45 m² — përdoret për material &amp; puna.</span>
+              </label>
+            </div>
+          </section>
 
-        <label>
-          Materiali për njësi (€)
-          <input type="number" step="0.01" {...register('materialPrice', { valueAsNumber: true })} />
-          <span className="field-hint">Kostoja e materialeve (pllaka, çimento, tuba…) për 1 {watched.unit || 'njësi'}.</span>
-        </label>
-        <label>
-          Puna për njësi (€)
-          <input type="number" step="0.01" {...register('laborPrice', { valueAsNumber: true })} />
-          <span className="field-hint">Kostoja e punës së dorës për 1 {watched.unit || 'njësi'}.</span>
-        </label>
+          <section className="panel form-section">
+            <h3 className="panel-title">3. Kostot</h3>
+            <div className="form-grid">
+              <label>
+                Materiali për njësi (€)
+                <input type="number" step="0.01" {...register('materialPrice', { valueAsNumber: true })} />
+                <span className="field-hint">Kostoja e materialeve (pllaka, çimento, tuba…) për 1 {watched.unit || 'njësi'}.</span>
+              </label>
+              <label>
+                Puna për njësi (€)
+                <input type="number" step="0.01" {...register('laborPrice', { valueAsNumber: true })} />
+                <span className="field-hint">Kostoja e punës së dorës për 1 {watched.unit || 'njësi'}.</span>
+              </label>
+              <label>
+                Ditë pune
+                <input type="number" step="0.5" {...register('days', { valueAsNumber: true })} />
+                <span className="field-hint">Sa ditë zgjat puna — përdoret vetëm për ushqim &amp; transport.</span>
+              </label>
+              <label>
+                Ushqim ditor (€)
+                <input type="number" step="0.01" {...register('foodPrice', { valueAsNumber: true })} />
+                <span className="field-hint">Çmimi për 1 ditë (× ditë pune, jo × sasia).</span>
+              </label>
+              <label>
+                Lokacioni
+                <select {...register('location')}>
+                  {TRANSPORT_OPTIONS.map((option) => (
+                    <option key={option.name} value={option.name}>{option.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Transport ditor (€)
+                <input type="number" step="0.01" {...register('transportPrice', { valueAsNumber: true })} />
+                <span className="field-hint">Çmimi transport për 1 ditë (× ditë pune).</span>
+              </label>
+              <label>
+                Shpenzime tjera (€)
+                <input type="number" step="0.01" {...register('otherPrice', { valueAsNumber: true })} />
+                <span className="field-hint">Shumë totale fikse (p.sh. leje, mjete) — pa shumëzim.</span>
+              </label>
+            </div>
+          </section>
 
-        <label>
-          Ditë pune
-          <input type="number" step="0.5" {...register('days', { valueAsNumber: true })} />
-          <span className="field-hint">Sa ditë zgjat puna — përdoret vetëm për ushqim & transport.</span>
-        </label>
-        <label>
-          Ushqim ditor (€)
-          <input type="number" step="0.01" {...register('foodPrice', { valueAsNumber: true })} />
-          <span className="field-hint">Çmimi për 1 ditë (× ditë pune, jo × sasia).</span>
-        </label>
-        <label>
-          Lokacioni
-          <select {...register('location')}>
-            {TRANSPORT_OPTIONS.map((option) => (
-              <option key={option.name} value={option.name}>{option.name}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Transport ditor (€)
-          <input type="number" step="0.01" {...register('transportPrice', { valueAsNumber: true })} />
-          <span className="field-hint">Çmimi transport për 1 ditë (× ditë pune).</span>
-        </label>
-        <label>
-          Shpenzime tjera (€)
-          <input type="number" step="0.01" {...register('otherPrice', { valueAsNumber: true })} />
-          <span className="field-hint">Shumë totale fikse (p.sh. leje, mjete) — pa shumëzim.</span>
-        </label>
-        <label>
-          Fitimi (%)
-          <input type="number" step="0.01" {...register('profitPercent', { valueAsNumber: true })} />
-        </label>
-        <label>
-          TVSH (%)
-          <input type="number" step="0.01" {...register('vatPercent', { valueAsNumber: true })} />
-        </label>
-        <button className="primary-button register-submit-btn" type="submit" disabled={loading}>
-          {loading ? 'Po ruhet...' : 'Llogarit dhe Ruaj Rreshtin'}
-        </button>
-      </form>
+          <section className="panel form-section">
+            <h3 className="panel-title">4. Marzhet</h3>
+            <div className="form-grid">
+              <label>
+                Fitimi (%)
+                <input type="number" step="0.01" {...register('profitPercent', { valueAsNumber: true })} />
+              </label>
+              <label>
+                TVSH (%)
+                <input type="number" step="0.01" {...register('vatPercent', { valueAsNumber: true })} />
+              </label>
+            </div>
+          </section>
 
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
-        <label style={{ flex: 1 }}>
-          Target total (€)
-          <input
-            placeholder="Target total (€)"
-            value={targetTotal}
-            onChange={(e) => setTargetTotal(e.target.value)}
-            style={{ width: 140 }}
-          />
-        </label>
-        <label>
-          Mode
-          <select value={mode} onChange={(e) => setMode(e.target.value as any)}>
-            <option value="proportional">Proportional</option>
-            <option value="labor-first">Labor-first</option>
-            <option value="material-first">Material-first</option>
-          </select>
-        </label>
-        <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          Weight
-          <input type="range" min={0} max={1} step={0.05} value={weight} onChange={(e) => setWeight(Number(e.target.value))} />
-          <small>{Math.round(weight * 100)}% labor</small>
-        </label>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button type="button" className="card" onClick={() => adjustLaborToTarget()}>Adjust to target</button>
-          <button type="button" className="card" onClick={() => { setTargetTotal(''); }}>Clear</button>
-        </div>
-      </div>
-      
-      <div style={{ marginTop: '1rem' }}>
-        <PricingPreview values={pricingInput} unit={watched.unit} />
+          <button className="primary-button register-submit-btn" type="submit" disabled={loading}>
+            {loading ? 'Po ruhet...' : 'Llogarit dhe Ruaj Rreshtin'}
+          </button>
+        </form>
+
+        <aside className="register-sidebar">
+          <PricingPreview values={pricingInput} unit={watched.unit} />
+
+          <section className="panel form-section">
+            <h3 className="panel-title">Rregullo drejt një totali synuar</h3>
+            <p className="muted field-hint">Vendos një total që do të arrish, dhe sistemi e rregullon materialin/punën automatikisht.</p>
+            <div className="register-target-stack">
+              <label>
+                Target total (€)
+                <input
+                  placeholder="p.sh. 500"
+                  value={targetTotal}
+                  onChange={(e) => setTargetTotal(e.target.value)}
+                />
+              </label>
+              <label>
+                Mënyra
+                <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+                  <option value="proportional">Proporcionale</option>
+                  <option value="labor-first">Puna e para</option>
+                  <option value="material-first">Materiali i para</option>
+                </select>
+              </label>
+              <label>
+                Pesha e punës: {Math.round(weight * 100)}%
+                <input type="range" min={0} max={1} step={0.05} value={weight} onChange={(e) => setWeight(Number(e.target.value))} />
+              </label>
+              <div className="form-actions-row">
+                <button type="button" className="card" onClick={() => adjustLaborToTarget()}>Rregullo</button>
+                <button type="button" className="card" onClick={() => setTargetTotal('')}>Pastro</button>
+              </div>
+            </div>
+          </section>
+        </aside>
       </div>
     </Shell>
   );

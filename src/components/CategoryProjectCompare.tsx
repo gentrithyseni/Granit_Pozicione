@@ -22,7 +22,7 @@ export function CategoryProjectCompare({ groups, categoryName }: { groups: Group
           <tr className="import-table-head-row">
             <th>Projekti</th>
             <th>Pozicione</th>
-            <th>Ëmes. / njësi</th>
+            <th>Çmimi / njësia</th>
             <th>Totali kategorie</th>
             <th>Dallimi</th>
           </tr>
