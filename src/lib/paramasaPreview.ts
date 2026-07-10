@@ -57,26 +57,51 @@ export function getRowIndentLevel(positionNumber: string): number {
   return normalized.split('.').length - 1;
 }
 
+/** Një rresht "2 INSTALIMI I KANALIZIMIT" (numër pozicioni pa pikë, dhe çmim 0) s'është pozicion
+ * i vërtetë — është titull seksioni i ngulitur brenda vetë paramasës. E njohim dhe e nxjerrim si
+ * titull, në vend që ta trajtojmë si pozicion me "0.00 x 1.00 = 0.00" (siç raportoi përdoruesi). */
+function isSectionHeaderRow(row: ParsedRow): boolean {
+  const normalized = normalizePositionToken(row.position_number);
+  if (!normalized || normalized.includes('.')) return false;
+  const qty = Number(row.quantity || 0);
+  const unitPrice = Number(row.unit_price || 0);
+  const totalPrice = Number(row.total_price || 0);
+  return qty === 0 && unitPrice === 0 && totalPrice === 0 && Boolean(String(row.description || '').trim());
+}
+
 export function groupRowsBySection(rows: ParsedRow[]): ParamasaSection[] {
   const sections = new Map<string, ParamasaSection>();
 
   rows.forEach((row) => {
     const root = getPositionRoot(row.position_number);
-    const sectionKey = root || row.position_number || 'unknown';
-    const existing = sections.get(sectionKey);
-    if (existing) {
-      existing.rows.push(row);
-      return;
+    // Prioritet: titulli real i seksionit (kapur nga rreshti me numër romak në vetë skedarin),
+    // sepse vetëm numri i pozicionit mund të mos përputhet me seksionin real — paramasa reale
+    // shpesh kanë numërtim jo-konsistent (p.sh. pozicion "4.1" i vendosur gabimisht nën
+    // seksionin III në vend të IV). Titulli real e rregullon këtë automatikisht.
+    const sectionKey = row.section_title || root || row.position_number || 'unknown';
+
+    let existing = sections.get(sectionKey);
+    if (!existing) {
+      existing = {
+        sectionKey,
+        sectionLabel: row.section_title || (isRomanRoot(sectionKey) || isNumericRoot(sectionKey) ? `${sectionKey}.` : sectionKey),
+        rows: [],
+      };
+      sections.set(sectionKey, existing);
     }
 
-    sections.set(sectionKey, {
-      sectionKey,
-      sectionLabel: isRomanRoot(sectionKey) || isNumericRoot(sectionKey) ? `${sectionKey}.` : sectionKey,
-      rows: [row],
-    });
+    if (isSectionHeaderRow(row)) {
+      const description = String(row.description || '').trim();
+      if (description && !existing.sectionLabel.includes(description)) {
+        existing.sectionLabel = `${getPositionRoot(row.position_number)}. ${description}`;
+      }
+      return; // titull, jo pozicion — s'shkon te existing.rows, s'zë vend faqeje
+    }
+
+    existing.rows.push(row);
   });
 
-  return Array.from(sections.values());
+  return Array.from(sections.values()).filter((section) => section.rows.length > 0);
 }
 
 function estimateRowUnits(row: ParsedRow): number {

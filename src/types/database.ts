@@ -6,6 +6,9 @@ export type DbProject = {
   total_amount?: number | null;
   description?: string | null;
   created_at?: string;
+  /** Kosto reale finale — plotësuar dorazi kur projekti mbyllet (krahasohet me planin). */
+  actual_total_cost?: number | null;
+  actual_notes?: string | null;
 };
 
 export type DbCategory = {

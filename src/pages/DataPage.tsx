@@ -54,6 +54,8 @@ export function DataPage() {
   const [metaClient, setMetaClient] = useState('');
   const [metaStatus, setMetaStatus] = useState('draft');
   const [metaDescription, setMetaDescription] = useState('');
+  const [metaActualCost, setMetaActualCost] = useState('');
+  const [metaActualNotes, setMetaActualNotes] = useState('');
   const [projectAnalysis, setProjectAnalysis] = useState<string[] | null>(null);
 
   const reloadProjects = async () => {
@@ -84,6 +86,8 @@ export function DataPage() {
       setMetaClient(selectedProject.client || '');
       setMetaStatus(selectedProject.status || 'draft');
       setMetaDescription(selectedProject.description || '');
+      setMetaActualCost(selectedProject.actual_total_cost != null ? String(selectedProject.actual_total_cost) : '');
+      setMetaActualNotes(selectedProject.actual_notes || '');
     }
   }, [selectedProject]);
 
@@ -144,6 +148,8 @@ export function DataPage() {
       client: metaClient.trim() || null,
       status: metaStatus,
       description: metaDescription.trim() || null,
+      actual_total_cost: metaActualCost.trim() === '' ? null : Number(metaActualCost),
+      actual_notes: metaActualNotes.trim() || null,
     });
     if (error) {
       showToast(error, 'error');
@@ -449,6 +455,21 @@ export function DataPage() {
             <label>
               Përshkrimi
               <input value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} />
+            </label>
+            <label>
+              Kosto reale finale (€)
+              <input
+                type="number"
+                step="0.01"
+                value={metaActualCost}
+                onChange={(e) => setMetaActualCost(e.target.value)}
+                placeholder="Plotëso kur projekti mbyllet"
+              />
+              <span className="field-hint">Sa ka kushtuar realisht (jo çmimi i ofertës) — krahasohet automatikisht te "Analiza e çmimeve".</span>
+            </label>
+            <label>
+              Shënime mbi koston reale
+              <input value={metaActualNotes} onChange={(e) => setMetaActualNotes(e.target.value)} placeholder="p.sh. shtrenjtim materiali, ditë shtesë..." />
             </label>
             <div className="form-actions-row">
               <button type="button" className="primary-button" onClick={saveProjectMeta}>Ruaj projektin</button>

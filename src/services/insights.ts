@@ -46,6 +46,38 @@ export async function fetchCategorySummaries(categories: { id: string; name: str
     .slice(0, 6);
 }
 
+export type MonthlyRevenuePoint = { month: string; label: string; total: number };
+
+/** Trendi i vlerës totale (të ofertuar) sipas muajit — bazuar në created_at të pozicioneve.
+ * Përdoret për të parë a po rritet biznesi me kohë (jo fitimi, thjesht vëllimi i ofertave). */
+export async function fetchMonthlyRevenueTrend(): Promise<MonthlyRevenuePoint[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('project_items').select('total_price, created_at');
+  if (error || !data) return [];
+
+  const byMonth = new Map<string, number>();
+  data.forEach((row) => {
+    const created = row.created_at as string | undefined;
+    if (!created) return;
+    const date = new Date(created);
+    if (Number.isNaN(date.getTime())) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    byMonth.set(key, (byMonth.get(key) || 0) + (Number(row.total_price) || 0));
+  });
+
+  return Array.from(byMonth.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, total]) => {
+      const [year, month] = key.split('-');
+      const date = new Date(Number(year), Number(month) - 1, 1);
+      return {
+        month: key,
+        label: date.toLocaleDateString('sq-AL', { month: 'short', year: '2-digit' }),
+        total: Number(total.toFixed(2)),
+      };
+    });
+}
+
 export async function fetchTotalSystemValue(): Promise<number> {
   if (!supabase) return 0;
   const { data } = await supabase.from('project_items').select('total_price');

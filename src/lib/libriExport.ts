@@ -7,6 +7,7 @@
 //   - përndryshe kthehet automatikisht te 1-pozicion/faqe (Shablloni-1), gjithmonë e sigurt.
 
 import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import type { ParsedRow } from './excel';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 import { groupRowsBySection } from './paramasaPreview';
@@ -227,7 +228,7 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
   const offerPositionsList = positions.map((p) => p.positionNumber).filter(Boolean).join(', ');
   setCell(ws, headerSlot.sectionAccountRow, 6, `  No ${page.sectionLabel.replace(/\.$/, '')}`);
   setCell(ws, headerSlot.sectionPositionsRow, 8, `   No  ${offerPositionsList || meta.offerPositions || ''}`);
-  setCell(ws, headerSlot.sectionTitleRow, 1, meta.sectionTitle || page.sectionLabel);
+  setCell(ws, headerSlot.sectionTitleRow, 1, page.sectionLabel || meta.sectionTitle);
 
   const distinctUnits = Array.from(new Set(positions.map((p) => p.unit).filter(Boolean)));
   const unitLabel = distinctUnits.length > 1 ? distinctUnits.join(' / ') : positions[0]?.unit || '';
@@ -281,6 +282,50 @@ export async function buildLibriSinglePageWorkbook(
 
 export function downloadWorkbookBuffer(buffer: ArrayBuffer, fileName: string): void {
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Gjeneron një ZIP me çdo faqe të Librit Ndërtimor si skedar .xlsx MË VETE brenda (jo një
+ * workbook i bashkuar). Përdoret kur duhet t'i shkarkosh të gjitha faqet njëherësh por secilën
+ * si skedar i pavarur (p.sh. për t'ia ndarë secilën faqe dikujt veç e veç).
+ */
+export async function buildLibriNdertimorZip(
+  rows: ParsedRow[],
+  meta: ParamasaPreviewMeta,
+  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook
+): Promise<Blob> {
+  const plan = planLibriExport(rows);
+  const zip = new JSZip();
+  const usedNames = new Set<string>();
+
+  for (let pageIndex = 0; pageIndex < plan.length; pageIndex += 1) {
+    const page = plan[pageIndex];
+    const buffer = await buildLibriSinglePageWorkbook(page, meta, templateLoader);
+
+    const safeLabel = (page.sectionLabel || `Faqja-${pageIndex + 1}`).replace(/[^\w.-]+/g, '-').replace(/\.+$/, '').replace(/-+/g, '-');
+    let fileName = `Faqja-${pageIndex + 1}-${safeLabel}.xlsx`;
+    let suffix = 1;
+    while (usedNames.has(fileName)) {
+      fileName = `Faqja-${pageIndex + 1}-${safeLabel}-(${suffix}).xlsx`;
+      suffix += 1;
+    }
+    usedNames.add(fileName);
+
+    zip.file(fileName, buffer);
+  }
+
+  return zip.generateAsync({ type: 'blob' });
+}
+
+export function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

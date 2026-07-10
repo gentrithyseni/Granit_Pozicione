@@ -10,6 +10,10 @@ export type ParsedRow = {
   total_price: number;
   sheet_name?: string;
   issues?: string[];
+  /** Titulli i seksionit real (nga rreshti me numër romak, p.sh. "II PUNËT E DEMOLIMIT"),
+   * kapur gjatë parsimit — përdoret si prioritet mbi grupimin e nxjerrë nga numri i pozicionit,
+   * sepse disa paramasa reale kanë numërtim jo-konsistent (p.sh. pozicion "4.1" nën seksionin III). */
+  section_title?: string;
   /** I pranishëm vetëm kur rreshti vjen nga formati "Libri Ndërtimor" (Shablloni-Faqe). */
   measurements?: LibriMeasurementLine[];
   /** Meta i librit ndërtimor (kryesi, muaji, objekti, seksioni...) kur burimi është ai format. */
@@ -77,6 +81,7 @@ function parseNumeric(value: unknown): number {
 function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] {
   const parsed: ParsedRow[] = [];
   let active = false;
+  let currentSectionLabel = '';
 
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index] || [];
@@ -87,12 +92,32 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
     }
 
     if (!active) continue;
-    if (isSignatureRow(row)) break;
     if (isEmptyRow(row)) continue;
 
     const positionNumber = extractPositionNumber(toCellText(row[0]));
     const description = toCellText(row[1]);
-    if (!positionNumber || !description || normalizeString(description).startsWith('gjithsejt')) {
+
+    // Rreshti i titullit të seksionit (p.sh. "II | PUNËT E DEMOLIMIT") — kolona A ka numër
+    // romak, jo arab, prandaj s'ka positionNumber. E ruajmë si kontekst për pozicionet
+    // pasuese, në vend ta hedhim poshtë — kjo mban "tekstin pas numrit" bashkë me seksionin
+    // (rregullim i kërkuar: "2 II PUNËT E DEMOLIMIT" duhet të njihet si i njëjti seksion).
+    if (!positionNumber && description && /^[IVXLCDM]+\s*$/i.test(toCellText(row[0]))) {
+      currentSectionLabel = `${toCellText(row[0])} ${description}`.trim();
+      continue;
+    }
+
+    // RËNDËSISHME: kontrollojmë PARA nëse rreshti ka numër pozicioni + përshkrim të vlefshëm.
+    // Vetëm nëse S'KA numër pozicioni (pra s'mund të jetë pozicion i vërtetë), atëherë e
+    // konsiderojmë si rresht "fundi i dokumentit/nënshkrim". Përndryshe, një pozicion i
+    // vërtetë me çmim (p.sh. "5.11 ... Ngjyrën e cakton organi mbikqyres") ndalonte gabimisht
+    // krejt përpunimin më parë, sepse teksti i tij përkonte rastësisht me frazën e kërkuar
+    // për nënshkrimin — duke humbur të gjitha seksionet pasuese (VI, VII etj.).
+    if (!positionNumber) {
+      if (isSignatureRow(row)) break;
+      continue;
+    }
+
+    if (!description || normalizeString(description).startsWith('gjithsejt')) {
       continue;
     }
 
@@ -109,6 +134,7 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
       unit_price: unitPrice,
       total_price: totalPrice,
       sheet_name: sheetName,
+      section_title: currentSectionLabel || undefined,
       issues: [],
     });
   }
@@ -190,8 +216,56 @@ function libriPositionsToRows(sheetName: string, meta: LibriMeta, positions: Ret
   }));
 }
 
-function parseWorkbook(workbook: XLSX.WorkBook): ParsedRow[] {
+function dedupeRows(rows: ParsedRow[]): ParsedRow[] {
+  const seen = new Set<string>();
+  const result: ParsedRow[] = [];
+
+  rows.forEach((row) => {
+    // çelës identiteti: pozicion + përshkrim + sasi + çmim njësi. Nëse KATËR këto përputhen
+    // saktësisht me një rresht të parë, është praktikisht i sigurt që është dublikatë (nga një
+    // fletë tjetër/rezervë e të njëjtit skedar), jo dy pozicione të ndryshme rastësisht identike.
+    const key = [
+      normalizeString(row.position_number),
+      normalizeString(row.description),
+      Number(row.quantity || 0).toFixed(2),
+      Number(row.unit_price || 0).toFixed(2),
+    ].join('|');
+
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(row);
+  });
+
+  return result;
+}
+
+/** Gjen rreshtin "TOTALI :" (nëse ekziston) dhe kthen shumën që vetë skedari e pretendon si
+ * total i përgjithshëm — përdoret si kontroll sigurie: krahasohet me shumën që llogarit vetë
+ * sistemi, dhe nëse s'përputhen, do të thotë diçka u la jashtë gjatë parsimit (siç ndodhi më
+ * parë me bug-un e "organi mbikëqyrës"). Kontrolli kërkon që kolona e parë e rreshtit të jetë
+ * SAKTËSISHT "totali" (me ose pa ":"), jo thjesht fjala "total" diku brenda një fjalie —
+ * kjo e bën të sigurt kundër "false positive"-ve, ndryshe nga gabimi i mëparshëm.
+ */
+function detectDeclaredTotal(rows: unknown[][]): number | null {
+  for (const row of rows) {
+    if (!row || row.length === 0) continue;
+    const first = normalizeString(toCellText(row[0]));
+    if (!/^totali?\s*:?$/.test(first)) continue;
+
+    const numericValues = row
+      .map((cell) => (typeof cell === 'number' ? cell : null))
+      .filter((v): v is number => v !== null && v > 0);
+
+    if (numericValues.length > 0) {
+      return Math.max(...numericValues);
+    }
+  }
+  return null;
+}
+
+function parseWorkbook(workbook: XLSX.WorkBook): { rows: ParsedRow[]; declaredTotal: number | null } {
   const rows: ParsedRow[] = [];
+  let declaredTotal: number | null = null;
 
   workbook.SheetNames.forEach((sheetName) => {
     const worksheet = workbook.Sheets[sheetName];
@@ -208,16 +282,25 @@ function parseWorkbook(workbook: XLSX.WorkBook): ParsedRow[] {
     const structuredRows = parseStructuredRows(jsonData, sheetName);
     if (structuredRows.length > 0) {
       rows.push(...structuredRows.map((row) => ({ ...row, source: 'paramasa' as const })));
+      const sheetDeclaredTotal = detectDeclaredTotal(jsonData);
+      if (sheetDeclaredTotal !== null) declaredTotal = (declaredTotal || 0) + sheetDeclaredTotal;
       return;
     }
 
     rows.push(...parseLegacyRows(jsonData, sheetName).map((row) => ({ ...row, source: 'paramasa' as const })));
   });
 
-  return rows;
+  return { rows: dedupeRows(rows), declaredTotal };
 }
 
-export async function parseExcel(file: File): Promise<ParsedRow[]> {
+export type ParseExcelResult = {
+  rows: ParsedRow[];
+  /** Totali që vetë skedari e pretendon (nëse ka rresht "TOTALI :"), për kontroll sigurie. */
+  declaredTotal: number | null;
+};
+
+/** Njësoj si parseExcel, por kthen edhe totalin e deklaruar nga vetë skedari, për verifikim. */
+export async function parseExcelWithValidation(file: File): Promise<ParseExcelResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -230,8 +313,12 @@ export async function parseExcel(file: File): Promise<ParsedRow[]> {
         reject(error);
       }
     };
-
-    reader.onerror = (error) => reject(error);
+    reader.onerror = () => reject(new Error('Gabim gjatë leximit të skedarit.'));
     reader.readAsArrayBuffer(file);
   });
+}
+
+export async function parseExcel(file: File): Promise<ParsedRow[]> {
+  const result = await parseExcelWithValidation(file);
+  return result.rows;
 }

@@ -45,7 +45,7 @@ export function PriceHistoryDashboard({ categories }: Props) {
       <p className="muted">Ndjek si ndryshon çmimi i një kategorie me kohë, dhe fitimin e planifikuar (çmimi i ofertuar kundrejt kostos) sipas projektit.</p>
 
       <div className="price-history-grid">
-        <div>
+        <div className="price-history-chart-box">
           <label>
             Kategoria
             <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
@@ -62,7 +62,7 @@ export function PriceHistoryDashboard({ categories }: Props) {
             <p className="muted field-hint">Ende s'ka histori çmimesh për këtë kategori (regjistro ose redakto një pozicion për të filluar).</p>
           )}
           {selectedCategoryId && !loading && trend.length > 0 && (
-            <VictoryChart theme={VictoryTheme.material} height={220} containerComponent={<VictoryContainer responsive={true} />}>
+            <VictoryChart theme={VictoryTheme.material} width={420} height={220} containerComponent={<VictoryContainer responsive={false} />}>
               <VictoryAxis tickFormat={() => ''} label="Kronologjikisht →" style={{ axisLabel: { fontSize: 9, padding: 20 } }} />
               <VictoryAxis dependentAxis tickFormat={(t) => `${t}€`} style={{ tickLabels: { fontSize: 9 } }} />
               <VictoryLine
@@ -74,11 +74,11 @@ export function PriceHistoryDashboard({ categories }: Props) {
           )}
         </div>
 
-        <div>
+        <div className="price-history-chart-box">
           <h4 className="price-history-subheading">Fitimi i planifikuar sipas projektit</h4>
           {topProfitProjects.length === 0 && <p className="muted field-hint">Ende s'ka të dhëna të mjaftueshme (regjistro pozicione me kosto materiali/pune).</p>}
           {topProfitProjects.length > 0 && (
-            <VictoryChart theme={VictoryTheme.material} height={240} domainPadding={16} containerComponent={<VictoryContainer responsive={true} />}>
+            <VictoryChart theme={VictoryTheme.material} width={420} height={240} domainPadding={16} containerComponent={<VictoryContainer responsive={false} />}>
               <VictoryAxis tickFormat={() => ''} />
               <VictoryAxis dependentAxis tickFormat={(t) => `${t}%`} style={{ tickLabels: { fontSize: 9 } }} />
               <VictoryBar
@@ -91,10 +91,21 @@ export function PriceHistoryDashboard({ categories }: Props) {
           )}
           <div className="price-history-table">
             {topProfitProjects.map((p) => (
-              <div key={p.projectId} className="price-history-row">
-                <span>{p.projectName}</span>
-                <span className="muted">kosto {p.plannedCost}€ → ofertë {p.plannedTotal}€</span>
-                <strong>{p.profitPercentAchieved}%</strong>
+              <div key={p.projectId} className="price-history-row-group">
+                <div className="price-history-row">
+                  <span>{p.projectName}</span>
+                  <span className="muted">kosto (plan) {p.plannedCost}€ → ofertë {p.plannedTotal}€</span>
+                  <strong>{p.profitPercentAchieved}%</strong>
+                </div>
+                {p.actualCost != null && (
+                  <div className="price-history-row price-history-row-real">
+                    <span className="muted">↳ reale: kosto {p.actualCost}€</span>
+                    <span className={p.estimateErrorPercent != null && p.estimateErrorPercent < 0 ? 'diff-up' : 'diff-down'}>
+                      vlerësimi ishte {p.estimateErrorPercent}% {p.estimateErrorPercent != null && p.estimateErrorPercent < 0 ? 'nën' : 'mbi'} realitetin
+                    </span>
+                    <strong>{p.realProfitPercent}% fitim real</strong>
+                  </div>
+                )}
               </div>
             ))}
           </div>

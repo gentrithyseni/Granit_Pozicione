@@ -14,7 +14,7 @@ export async function fetchCompletedProjects(): Promise<DbProject[]> {
 
 export async function updateProject(
   id: string,
-  patch: Partial<Pick<DbProject, 'name' | 'client' | 'status' | 'description'>>
+  patch: Partial<Pick<DbProject, 'name' | 'client' | 'status' | 'description' | 'actual_total_cost' | 'actual_notes'>>
 ): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase nuk është i lidhur' };
   const { error } = await supabase.from('projects').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);

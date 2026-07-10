@@ -5,10 +5,12 @@ import { Shell } from '../components/Shell';
 import { StatusBadge } from '../components/StatusBadge';
 import { InsightsCharts } from '../components/InsightsCharts';
 import { hasSupabaseConfig } from '../lib/supabase';
+import { RevenueTrendChart } from '../components/Revenuetrendchart';
 import { supabase } from '../lib/supabase';
 import { fetchCompletedProjects } from '../services/projects';
 import { fetchDashboardStats } from '../services/stats';
-import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue } from '../services/insights';
+import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue, fetchMonthlyRevenueTrend } from '../services/insights';
+import type { MonthlyRevenuePoint } from '../services/insights';
 import { ensureDefaultCategories } from '../services/categories';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import type { DbProject, ProjectSummary, CategorySummary } from '../types/database';
@@ -25,12 +27,14 @@ export function HomePage() {
   const [totalValue, setTotalValue] = useState(0);
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
+  const [revenueTrend, setRevenueTrend] = useState<MonthlyRevenuePoint[]>([]);
   const [allProjects, setAllProjects] = useState<DbProject[]>([]);
 
   useEffect(() => {
     fetchDashboardStats().then(setStats);
     fetchCompletedProjects().then(setReferences);
     fetchTotalSystemValue().then(setTotalValue);
+    fetchMonthlyRevenueTrend().then(setRevenueTrend);
 
     (async () => {
       if (!supabase) return;
@@ -137,6 +141,12 @@ export function HomePage() {
 
       <div className="home-columns">
         <div className="home-column-main">
+          <section className="panel">
+            <h3 className="panel-heading-accent"><TrendingUp size={17} className="panel-heading-icon" />Trendi i vlerës (a po rritet biznesi)</h3>
+            <p className="muted">Vlera totale e ofertave (jo fitimi) sipas muajit — bazuar në datën e regjistrimit të pozicioneve.</p>
+            <RevenueTrendChart points={revenueTrend} />
+          </section>
+
           {(projectSummaries.length > 0 || categorySummaries.length > 0) && (
             <section className="panel">
               <h3 className="panel-heading-accent"><TrendingUp size={17} className="panel-heading-icon" />Statistika</h3>

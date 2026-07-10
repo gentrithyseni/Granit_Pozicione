@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import { ParamasaPreview, type ParamasaPreviewMeta } from '../components/ParamasaPreview';
 import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
-import { parseExcel, type ParsedRow } from '../lib/excel';
-import { buildLibriNdertimorWorkbook, downloadWorkbookBuffer, planLibriExport } from '../lib/libriExport';
+import { parseExcelWithValidation, type ParsedRow } from '../lib/excel';
+import { buildLibriNdertimorWorkbook, buildLibriNdertimorZip, downloadWorkbookBuffer, downloadBlob, planLibriExport } from '../lib/libriExport';
 import { supabase } from '../lib/supabase';
 import type { DbProject } from '../types/database';
 
@@ -46,12 +46,26 @@ function suggestPreviewMeta(rows: ParsedRow[], fileName: string, projectName: st
   };
 }
 
+function mergeBlankFields(current: ParamasaPreviewMeta, suggested: ParamasaPreviewMeta): ParamasaPreviewMeta {
+  return {
+    executorName: current.executorName || suggested.executorName,
+    month: current.month || suggested.month,
+    date: current.date || suggested.date,
+    objectName: current.objectName || suggested.objectName,
+    offerAccount: current.offerAccount || suggested.offerAccount,
+    offerPositions: current.offerPositions || suggested.offerPositions,
+    sectionTitle: current.sectionTitle || suggested.sectionTitle,
+  };
+}
+
 export function ImportPage() {
   const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
   const [previewMode, setPreviewMode] = useState<'table' | 'preview'>('preview');
   const [libriExportLoading, setLibriExportLoading] = useState(false);
+  const [zipExportLoading, setZipExportLoading] = useState(false);
   const [previewMeta, setPreviewMeta] = useState<ParamasaPreviewMeta>({
     executorName: '',
     month: '',
@@ -59,12 +73,10 @@ export function ImportPage() {
     objectName: '',
     offerAccount: '',
     offerPositions: '',
-    sectionTitle: 'Paramasa',
+    sectionTitle: '',
   });
   const [projects, setProjects] = useState<DbProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [savedImport, setSavedImport] = useState<{ projectId: string; itemIds: string[]; projectCreated: boolean; historyId?: string } | null>(null);
-  const undoTimer = useRef<number | null>(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -72,11 +84,19 @@ export function ImportPage() {
     supabase.from('projects').select('*').order('created_at', { ascending: false }).then(({ data }) => data && setProjects(data));
   }, []);
 
+  // Vetëm plotëson fushat ende bosh kur zgjidhet një projekt — s'e prek asnjë fushë që
+  // përdoruesi e ka shkruar tashmë vetë (rregullim i raportuar: muaji/objekti fshiheshin
+  // pas çdo ngarkimi/ndryshim projekti).
   useEffect(() => {
-    if (rows.length === 0) return;
+    if (!selectedProjectId) return;
     const selectedProject = projects.find((project) => project.id === selectedProjectId);
-    setPreviewMeta(suggestPreviewMeta(rows, fileName, selectedProject?.name || ''));
-  }, [fileName, projects, rows, selectedProjectId]);
+    if (!selectedProject) return;
+    setPreviewMeta((current) => ({
+      ...current,
+      executorName: current.executorName || selectedProject.name,
+      objectName: current.objectName || selectedProject.name,
+    }));
+  }, [selectedProjectId, projects]);
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -84,72 +104,24 @@ export function ImportPage() {
     setLoading(true);
     setFileName(file.name);
     setRows([]);
+    setDeclaredTotal(null);
     try {
-      const parsedRows = await parseExcel(file);
+      const { rows: parsedRows, declaredTotal: fileTotal } = await parseExcelWithValidation(file);
       setRows(parsedRows);
+      setDeclaredTotal(fileTotal);
       const selectedProject = projects.find((project) => project.id === selectedProjectId);
-      setPreviewMeta(suggestPreviewMeta(parsedRows, file.name, selectedProject?.name || ''));
+      const suggested = suggestPreviewMeta(parsedRows, file.name, selectedProject?.name || '');
+      setPreviewMeta((current) => mergeBlankFields(current, suggested));
+
+      const computedTotal = parsedRows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
+      if (fileTotal !== null && Math.abs(fileTotal - computedTotal) > Math.max(1, fileTotal * 0.005)) {
+        showToast(
+          `⚠ Kujdes: skedari thotë totali është ${fileTotal.toFixed(2)}€, por sistemi llogariti ${computedTotal.toFixed(2)}€ — diçka mund të mungojë.`,
+          'error'
+        );
+      }
     } catch {
       showToast('Gabim gjatë leximit të Excel-it.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!supabase) return showToast('Supabase nuk është i lidhur', 'error');
-    if (rows.length === 0) return showToast('Nuk ka të dhëna për t\'u importuar', 'error');
-    setLoading(true);
-    try {
-      let projectId = selectedProjectId;
-      let projectCreated = false;
-      if (!projectId) {
-        const projectName = `${fileName.replace(/\.[^/.]+$/, '') || 'Import'} - ${new Date().toLocaleDateString()}`;
-        const { data, error } = await supabase.from('projects').insert([{ name: projectName }]).select().single();
-        if (error) throw error;
-        projectId = data.id;
-        projectCreated = true;
-      }
-
-      const { data, error } = await supabase.from('project_items').insert(
-        rows.map((row) => ({
-          project_id: projectId,
-          position_number: row.position_number,
-          description: row.description,
-          unit: row.unit,
-          quantity: row.quantity,
-          unit_price: row.unit_price,
-          total_price: row.total_price,
-        }))
-      ).select();
-      if (error) throw error;
-
-      const itemIds = (data || []).map((item) => item.id).filter(Boolean);
-      const { data: history } = await supabase.from('import_history').insert([{ project_id: projectId, file_name: fileName, item_ids: itemIds }]).select().single();
-      setSavedImport({ projectId, itemIds, projectCreated, historyId: history?.id });
-      if (undoTimer.current) window.clearTimeout(undoTimer.current);
-      undoTimer.current = window.setTimeout(() => setSavedImport(null), 10000);
-      setRows([]);
-      showToast('Importimi u përfundua me sukses.', 'success');
-    } catch (err: unknown) {
-      showToast(`Gabim gjatë ruajtjes: ${err instanceof Error ? err.message : 'Gabim'}`, 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUndo = async () => {
-    if (!supabase || !savedImport) return;
-    setLoading(true);
-    try {
-      if (savedImport.itemIds.length > 0) await supabase.from('project_items').delete().in('id', savedImport.itemIds);
-      if (savedImport.projectCreated) await supabase.from('projects').delete().eq('id', savedImport.projectId);
-      if (savedImport.historyId) await supabase.from('import_history').update({ undone: true }).eq('id', savedImport.historyId);
-      setSavedImport(null);
-      if (undoTimer.current) window.clearTimeout(undoTimer.current);
-      showToast('Importi u rikthye me sukses.', 'success');
-    } catch (err: unknown) {
-      showToast(`Gabim gjatë undo: ${err instanceof Error ? err.message : 'Gabim'}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -183,6 +155,21 @@ export function ImportPage() {
     }
   };
 
+  const handleDownloadLibriNdertimorZip = async () => {
+    if (rows.length === 0) return;
+    setZipExportLoading(true);
+    try {
+      const plan = planLibriExport(rows);
+      const blob = await buildLibriNdertimorZip(rows, previewMeta);
+      downloadBlob(blob, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor-faqet.zip`);
+      showToast(`ZIP u shkarkua: ${plan.length} skedarë, një për çdo faqe.`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gabim gjatë gjenerimit të ZIP.', 'error');
+    } finally {
+      setZipExportLoading(false);
+    }
+  };
+
   const handleAutoSuggestMeta = () => {
     const selectedProject = projects.find((project) => project.id === selectedProjectId);
     setPreviewMeta(suggestPreviewMeta(rows, fileName, selectedProject?.name || ''));
@@ -200,13 +187,13 @@ export function ImportPage() {
     <Shell>
       <div className="page-header">
         <h1>Ngarko Excel</h1>
-        <p className="muted">Ngarko Excel-in, lejo sugjerimin automatik të te dhenave, dhe kalo nga preview në final për pamjen e plotë.</p>
+        <p className="muted">Ngarko Excel-in, lejo sugjerimin automatik të metadata-s, dhe kalo nga preview në final për pamjen e plotë.</p>
       </div>
 
       <div className="panel import-panel">
         <div className="import-meta-panel">
           <div className="import-meta-panel-head">
-            <strong>Te dhenat e paramasës</strong>
+            <strong>Metadata e paramasës</strong>
             <span className="muted">Sugjerohen automatikisht nga sistemi, pastaj mund t'i ndryshosh manualisht.</span>
           </div>
           <div className="form-grid import-meta-grid">
@@ -262,6 +249,18 @@ export function ImportPage() {
             <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={loading} className="import-file-input" />
           </label>
         </div>
+
+        {rows.length > 0 && !loading && declaredTotal !== null && (() => {
+          const computedTotal = rows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
+          const mismatch = Math.abs(declaredTotal - computedTotal) > Math.max(1, declaredTotal * 0.005);
+          if (!mismatch) return null;
+          return (
+            <div className="import-total-warning">
+              ⚠ <strong>Kujdes:</strong> skedari vetë thotë totali është <strong>{declaredTotal.toFixed(2)}€</strong>, por sistemi llogariti{' '}
+              <strong>{computedTotal.toFixed(2)}€</strong> — kontrollo Tabelën, diçka mund të mungojë ose të jetë lexuar gabim.
+            </div>
+          );
+        })()}
 
         {rows.length > 0 && !loading && (
           <div className="import-preview-toolbar import-preview-head">
@@ -326,21 +325,15 @@ export function ImportPage() {
             )}
 
             <div className="import-actions">
-              <button className="primary-button import-save-btn" type="button" onClick={handleSave} disabled={loading}>Aprovo dhe Shto Pozicionet</button>
               <button className="card import-cancel-btn" type="button" onClick={handlePrint} disabled={loading || rows.length === 0}>Print</button>
               <button className="card import-cancel-btn" type="button" onClick={handleDownloadLibriNdertimor} disabled={loading || libriExportLoading || rows.length === 0}>
                 {libriExportLoading ? 'Duke gjeneruar…' : 'Shkarko Libër Ndërtimor (.xlsx origjinal)'}
               </button>
+              <button className="card import-cancel-btn" type="button" onClick={handleDownloadLibriNdertimorZip} disabled={loading || zipExportLoading || rows.length === 0}>
+                {zipExportLoading ? 'Duke gjeneruar…' : 'Shkarko çdo faqe veç e veç (.zip)'}
+              </button>
               <button className="card import-cancel-btn" type="button" onClick={() => setRows([])} disabled={loading}>Anulo</button>
             </div>
-          </div>
-        )}
-
-        {savedImport && (
-          <div className="import-undo-toast">
-            <span>Importi u ruajt. </span>
-            <button className="link-button" type="button" onClick={handleUndo} disabled={loading}>Undo</button>
-            <button className="link-button" type="button" onClick={() => setSavedImport(null)}>Mbyll</button>
           </div>
         )}
       </div>

@@ -59,13 +59,19 @@ export type ProfitSummary = {
   plannedTotal: number;
   profitAmount: number;
   profitPercentAchieved: number;
+  /** Kosto reale finale (nëse është plotësuar dorazi te projekti). null = ende s'ka të dhëna. */
+  actualCost: number | null;
+  realProfitAmount: number | null;
+  realProfitPercent: number | null;
+  /** Sa larg ka qenë vlerësimi fillestar nga realiteti, në % (0 = perfekt). null nëse s'ka kosto reale. */
+  estimateErrorPercent: number | null;
 };
 
 /** Përmbledhje fitimi (i planifikuar, jo real-pas-përfundimit) sipas projektit — nga
  * item_expenses (kosto) kundrejt project_items.total_price (çmimi final i ofertuar). */
 export async function fetchProfitSummaryByProject(): Promise<ProfitSummary[]> {
   if (!supabase) return [];
-  const { data: items } = await supabase.from('project_items').select('id, project_id, total_price, projects(name)');
+  const { data: items } = await supabase.from('project_items').select('id, project_id, total_price, projects(name, actual_total_cost)');
   const { data: expenses } = await supabase.from('item_expenses').select('project_item_id, total_cost');
   if (!items) return [];
 
@@ -75,25 +81,44 @@ export async function fetchProfitSummaryByProject(): Promise<ProfitSummary[]> {
     costByItem.set(key, (costByItem.get(key) || 0) + (Number(exp.total_cost) || 0));
   });
 
-  const byProject = new Map<string, { name: string; cost: number; total: number }>();
+  const byProject = new Map<string, { name: string; cost: number; total: number; actualCost: number | null }>();
   items.forEach((item) => {
     const projectId = item.project_id as string;
-    const projectsField = (item as { projects?: { name: string } | { name: string }[] | null }).projects;
-    const projectName = Array.isArray(projectsField) ? projectsField[0]?.name : projectsField?.name;
+    const projectsField = (item as { projects?: { name: string; actual_total_cost?: number | null } | { name: string; actual_total_cost?: number | null }[] | null }).projects;
+    const projectData = Array.isArray(projectsField) ? projectsField[0] : projectsField;
     const cost = costByItem.get(item.id as string) || 0;
     const total = Number(item.total_price) || 0;
-    const existing = byProject.get(projectId) || { name: projectName || 'Projekt', cost: 0, total: 0 };
+    const existing = byProject.get(projectId) || {
+      name: projectData?.name || 'Projekt',
+      cost: 0,
+      total: 0,
+      actualCost: projectData?.actual_total_cost ?? null,
+    };
     existing.cost += cost;
     existing.total += total;
     byProject.set(projectId, existing);
   });
 
-  return Array.from(byProject.entries()).map(([projectId, v]) => ({
-    projectId,
-    projectName: v.name,
-    plannedCost: Number(v.cost.toFixed(2)),
-    plannedTotal: Number(v.total.toFixed(2)),
-    profitAmount: Number((v.total - v.cost).toFixed(2)),
-    profitPercentAchieved: v.cost > 0 ? Number((((v.total - v.cost) / v.cost) * 100).toFixed(1)) : 0,
-  }));
+  return Array.from(byProject.entries()).map(([projectId, v]) => {
+    const plannedCost = Number(v.cost.toFixed(2));
+    const plannedTotal = Number(v.total.toFixed(2));
+    const actualCost = v.actualCost != null ? Number(v.actualCost) : null;
+    const realProfitAmount = actualCost != null ? Number((v.total - actualCost).toFixed(2)) : null;
+    const realProfitPercent = actualCost != null && actualCost > 0 ? Number((((v.total - actualCost) / actualCost) * 100).toFixed(1)) : null;
+    const estimateErrorPercent =
+      actualCost != null && actualCost > 0 ? Number((((plannedCost - actualCost) / actualCost) * 100).toFixed(1)) : null;
+
+    return {
+      projectId,
+      projectName: v.name,
+      plannedCost,
+      plannedTotal,
+      profitAmount: Number((v.total - v.cost).toFixed(2)),
+      profitPercentAchieved: v.cost > 0 ? Number((((v.total - v.cost) / v.cost) * 100).toFixed(1)) : 0,
+      actualCost,
+      realProfitAmount,
+      realProfitPercent,
+      estimateErrorPercent,
+    };
+  });
 }
