@@ -19,34 +19,39 @@ export async function fetchProjectSummaries(projects: DbProject[]): Promise<Proj
       total: totals.get(project.id) || 0,
     }))
     .filter((item) => item.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+    .sort((a, b) => b.total - a.total);
 }
 
 export async function fetchCategorySummaries(categories: { id: string; name: string }[]): Promise<CategorySummary[]> {
   if (!supabase || categories.length === 0) return [];
-  const { data, error } = await supabase.from('project_items').select('category_id');
+  const { data, error } = await supabase.from('project_items').select('category_id, total_price');
   if (error || !data) return [];
 
-  const counts = new Map<string, number>();
+  const summaries = new Map<string, { count: number; total: number }>();
   for (const row of data) {
     const id = row.category_id as string | null;
     if (!id) continue;
-    counts.set(id, (counts.get(id) || 0) + 1);
+    const current = summaries.get(id) || { count: 0, total: 0 };
+    current.count += 1;
+    current.total += Number(row.total_price) || 0;
+    summaries.set(id, current);
   }
 
   return categories
-    .map((category) => ({
-      id: category.id,
-      name: category.name,
-      count: counts.get(category.id) || 0,
-    }))
+    .map((category) => {
+      const summary = summaries.get(category.id) || { count: 0, total: 0 };
+      return {
+        id: category.id,
+        name: category.name,
+        count: summary.count,
+        total: Number(summary.total.toFixed(2)),
+      };
+    })
     .filter((item) => item.count > 0)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 6);
+    .sort((a, b) => b.total - a.total);
 }
 
-export type MonthlyRevenuePoint = { month: string; label: string; total: number };
+export type MonthlyRevenuePoint = { month: string; label: string; total: number; count: number; average: number };
 
 /** Trendi i vlerës totale (të ofertuar) sipas muajit — bazuar në created_at të pozicioneve.
  * Përdoret për të parë a po rritet biznesi me kohë (jo fitimi, thjesht vëllimi i ofertave). */
@@ -55,25 +60,30 @@ export async function fetchMonthlyRevenueTrend(): Promise<MonthlyRevenuePoint[]>
   const { data, error } = await supabase.from('project_items').select('total_price, created_at');
   if (error || !data) return [];
 
-  const byMonth = new Map<string, number>();
+  const byMonth = new Map<string, { total: number; count: number }>();
   data.forEach((row) => {
     const created = row.created_at as string | undefined;
     if (!created) return;
     const date = new Date(created);
     if (Number.isNaN(date.getTime())) return;
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    byMonth.set(key, (byMonth.get(key) || 0) + (Number(row.total_price) || 0));
+    const current = byMonth.get(key) || { total: 0, count: 0 };
+    current.total += Number(row.total_price) || 0;
+    current.count += 1;
+    byMonth.set(key, current);
   });
 
   return Array.from(byMonth.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, total]) => {
+    .map(([key, summary]) => {
       const [year, month] = key.split('-');
       const date = new Date(Number(year), Number(month) - 1, 1);
       return {
         month: key,
         label: date.toLocaleDateString('sq-AL', { month: 'short', year: '2-digit' }),
-        total: Number(total.toFixed(2)),
+        total: Number(summary.total.toFixed(2)),
+        count: summary.count,
+        average: summary.count > 0 ? Number((summary.total / summary.count).toFixed(2)) : 0,
       };
     });
 }

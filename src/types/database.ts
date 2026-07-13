@@ -49,6 +49,7 @@ export type CategorySummary = {
   id: string;
   name: string;
   count: number;
+  total: number;
 };
 
 export type SearchResultItem = DbProjectItem & {
