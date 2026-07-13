@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { MoonStar, SunMedium } from 'lucide-react';
 import { hasSupabaseConfig } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 
 type AuthMode = 'login' | 'register' | 'forgot' | 'updatePassword';
 type AuthValues = { email: string; password: string; confirmPassword: string };
@@ -36,6 +38,7 @@ const modeCopy: Record<AuthMode, { title: string; description: string; submit: s
 
 export function LoginPage() {
   const { user, recoveryMode, signIn, signUp, resetPassword, updatePassword } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [mode, setMode] = useState<AuthMode>(recoveryMode ? 'updatePassword' : 'login');
@@ -59,6 +62,11 @@ export function LoginPage() {
     return (
       <div className="auth-page">
         <div className="auth-card card">
+          <div className="auth-card-topbar">
+            <button type="button" className="card theme-toggle-btn auth-theme-toggle" onClick={toggleTheme} aria-label="Ndërro temën">
+              {theme === 'light' ? <MoonStar size={18} /> : <SunMedium size={18} />} {theme === 'light' ? 'Dark' : 'Light'}
+            </button>
+          </div>
           <h1>Hyrje</h1>
           <p className="muted">Konfiguro VITE_SUPABASE_URL dhe VITE_SUPABASE_ANON_KEY ne .env</p>
           <button type="button" className="primary-button" onClick={() => navigate('/')}>Vazhdo pa auth</button>
@@ -139,6 +147,11 @@ export function LoginPage() {
   return (
     <div className="auth-page">
       <div className="auth-card card">
+        <div className="auth-card-topbar">
+          <button type="button" className="card theme-toggle-btn auth-theme-toggle" onClick={toggleTheme} aria-label="Ndërro temën">
+            {theme === 'light' ? <MoonStar size={18} /> : <SunMedium size={18} />} {theme === 'light' ? 'Dark' : 'Light'}
+          </button>
+        </div>
         <div className="eyebrow accent">Graniti</div>
         <h1>{copy.title}</h1>
         <p className="muted">{copy.description}</p>

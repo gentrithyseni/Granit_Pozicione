@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Database, FileUp, WalletCards, TrendingUp } from 'lucide-react';
+import { Database, FileUp, WalletCards, TrendingUp, PieChart } from 'lucide-react';
 import { Shell } from '../components/Shell';
 import { StatusBadge } from '../components/StatusBadge';
 import { InsightsCharts } from '../components/InsightsCharts';
 import { hasSupabaseConfig } from '../lib/supabase';
-import { RevenueTrendChart } from '../components/RevenueTrendChart';
 import { supabase } from '../lib/supabase';
 import { fetchCompletedProjects } from '../services/projects';
 import { fetchDashboardStats } from '../services/stats';
-import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue, fetchMonthlyRevenueTrend } from '../services/insights';
-import type { MonthlyRevenuePoint } from '../services/insights';
+import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue } from '../services/insights';
 import { ensureDefaultCategories } from '../services/categories';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import type { DbProject, ProjectSummary, CategorySummary } from '../types/database';
@@ -27,14 +25,12 @@ export function HomePage() {
   const [totalValue, setTotalValue] = useState(0);
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
-  const [revenueTrend, setRevenueTrend] = useState<MonthlyRevenuePoint[]>([]);
   const [allProjects, setAllProjects] = useState<DbProject[]>([]);
 
   useEffect(() => {
     fetchDashboardStats().then(setStats);
     fetchCompletedProjects().then(setReferences);
     fetchTotalSystemValue().then(setTotalValue);
-    fetchMonthlyRevenueTrend().then(setRevenueTrend);
 
     (async () => {
       if (!supabase) return;
@@ -62,7 +58,10 @@ export function HomePage() {
     });
     return PROJECT_STATUSES.map((s) => ({ ...s, count: counts.get(s.value) || 0 }));
   }, [allProjects]);
-  const statusTotal = statusCounts.reduce((sum, s) => sum + s.count, 0);
+  const inProgressProjects = allProjects
+    .filter((project) => (project.status || 'draft') === 'in_progress')
+    .map((project) => project.name)
+    .slice(0, 6);
 
   return (
     <Shell>
@@ -94,31 +93,6 @@ export function HomePage() {
             <span className="home-stat-label">vlera totale</span>
           </div>
         </div>
-
-        {statusTotal > 0 && (
-          <div className="home-status-bar" role="img" aria-label="Shpërndarja e projekteve sipas statusit">
-            {statusCounts.map((s) => (
-              s.count > 0 && (
-                <div
-                  key={s.value}
-                  className={`home-status-segment status-${s.value}`}
-                  style={{ flexGrow: s.count }}
-                  title={`${s.label}: ${s.count}`}
-                />
-              )
-            ))}
-          </div>
-        )}
-        {statusTotal > 0 && (
-          <div className="home-status-legend">
-            {statusCounts.filter((s) => s.count > 0).map((s) => (
-              <span key={s.value} className="home-status-legend-item">
-                <span className={`home-status-dot status-${s.value}`} />
-                {s.label} · {s.count}
-              </span>
-            ))}
-          </div>
-        )}
       </section>
 
       <section className="cards-grid">
@@ -142,9 +116,33 @@ export function HomePage() {
       <div className="home-columns">
         <div className="home-column-main">
           <section className="panel">
-            <h3 className="panel-heading-accent"><TrendingUp size={17} className="panel-heading-icon" />Trendi i vlerës (a po rritet biznesi)</h3>
-            <p className="muted">Vlera totale e ofertave (jo fitimi) sipas muajit — bazuar në datën e regjistrimit të pozicioneve.</p>
-            <RevenueTrendChart points={revenueTrend} />
+            <h3 className="panel-heading-accent"><PieChart size={17} className="panel-heading-icon" />Gjendja e projekteve</h3>
+            <p className="muted">Pamje e shpejtë e projekteve draft, në proces dhe të përfunduara.</p>
+            <div className="project-status-overview">
+              {statusCounts.map((status) => (
+                <div key={status.value} className={`project-status-card status-${status.value}`}>
+                  <div className="project-status-head">
+                    <StatusBadge status={status.value} />
+                    <strong>{status.count}</strong>
+                  </div>
+                  <div className="project-status-description">{status.label}</div>
+                  <div className="project-status-mini-bar" aria-hidden="true">
+                    <span className={`project-status-mini-fill status-${status.value}`} style={{ width: `${Math.max(12, status.count > 0 ? 100 : 12)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="project-name-list-wrap">
+              <div className="project-name-list-title">Në proces</div>
+              <div className="project-name-list">
+                {inProgressProjects.length > 0 ? (
+                  inProgressProjects.map((name) => <div key={name} className="project-name-item">{name}</div>)
+                ) : (
+                  <div className="muted project-name-item">S'ka projekte në proces.</div>
+                )}
+              </div>
+            </div>
           </section>
 
           {(projectSummaries.length > 0 || categorySummaries.length > 0) && (

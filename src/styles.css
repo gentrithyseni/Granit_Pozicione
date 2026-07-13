@@ -668,6 +668,16 @@ input:focus, select:focus {
   gap: 14px;
 }
 
+.auth-card-topbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.auth-theme-toggle {
+  width: auto;
+  padding: 10px 12px;
+}
+
 .auth-form { display: grid; gap: 14px; }
 .auth-error { color: #f87171; margin: 0; font-size: 0.9rem; }
 .auth-success { color: var(--primary); margin: 0; font-size: 0.9rem; font-weight: 700; }
@@ -1171,16 +1181,85 @@ input:focus, select:focus {
 
 .charts-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(3, minmax(320px, 1fr));
   gap: 16px;
   margin-top: 20px;
 }
 
-.chart-panel { padding: 16px; min-width: 0; }
+.chart-panel { padding: 18px; min-width: 0; }
 .chart-panel svg { display: block !important; width: 100% !important; height: auto !important; max-width: 100% !important; }
 .chart-title { margin: 0 0 8px; font-size: 1rem; color: var(--primary); }
 .chart-subtitle { margin: 0 0 10px; font-size: 0.8rem; }
 .chart-empty { padding: 20px; }
+.project-status-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.project-status-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface-alt);
+  min-width: 0;
+}
+.project-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.project-status-head strong {
+  font-size: 1.15rem;
+  color: var(--primary);
+}
+.project-status-card.status-draft { background: linear-gradient(180deg, rgba(134, 168, 154, 0.12), var(--surface-alt)); }
+.project-status-card.status-in_progress { background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), var(--surface-alt)); }
+.project-status-card.status-completed { background: linear-gradient(180deg, rgba(16, 185, 129, 0.14), var(--surface-alt)); }
+.project-status-description {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.project-status-mini-bar {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+.project-status-mini-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.project-status-mini-fill.status-draft { background: var(--muted); }
+.project-status-mini-fill.status-in_progress { background: #f59e0b; }
+.project-status-mini-fill.status-completed { background: var(--primary); }
+.project-name-list-wrap {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.project-name-list-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.project-name-list {
+  display: grid;
+  gap: 8px;
+}
+.project-name-item {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
 .insight-metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1230,12 +1309,6 @@ input:focus, select:focus {
 .chart-legend-label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .chart-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
-.reference-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-}
-
 .reference-item {
   display: flex;
   justify-content: space-between;
@@ -1262,6 +1335,7 @@ input:focus, select:focus {
   border-radius: 14px;
   font-weight: 600;
   box-shadow: var(--shadow);
+  .project-status-overview { grid-template-columns: 1fr; }
   border: 1px solid var(--border);
   animation: toast-in 0.25s ease;
 }
@@ -1292,10 +1366,16 @@ input:focus, select:focus {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: static; }
   .hero, .cards-grid, .form-grid { grid-template-columns: 1fr; display: grid; }
+  .project-status-overview { grid-template-columns: 1fr; }
   .hero { display: grid; }
   .hero-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
   .hero-stats { grid-template-columns: 1fr; }
+  .charts-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 1280px) and (min-width: 901px) {
+  .charts-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

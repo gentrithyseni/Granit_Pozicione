@@ -21,9 +21,9 @@ export function InsightsCharts({ projectSummaries, categorySummaries }: Props) {
   const sortedProjects = [...projectSummaries].sort((a, b) => b.total - a.total).slice(0, 8);
   const sortedCategories = [...categorySummaries].sort((a, b) => b.count - a.count);
   const sortedCategoriesByValue = [...categorySummaries].sort((a, b) => b.total - a.total);
-  const totalCategoryCount = categorySummaries.reduce((sum, c) => sum + c.count, 0);
   const totalProjectValue = projectSummaries.reduce((sum, project) => sum + project.total, 0);
   const totalCategoryValue = categorySummaries.reduce((sum, category) => sum + category.total, 0);
+  const totalCategoryCount = categorySummaries.reduce((sum, c) => sum + c.count, 0);
   const topProject = sortedProjects[0];
   const topCategoryByValue = sortedCategoriesByValue[0];
   const averageProjectValue = projectSummaries.length > 0 ? totalProjectValue / projectSummaries.length : 0;
@@ -65,10 +65,10 @@ export function InsightsCharts({ projectSummaries, categorySummaries }: Props) {
             </p>
             <VictoryChart
               theme={VictoryTheme.material}
-              width={280}
-              height={220}
+              width={300}
+              height={250}
               domainPadding={{ x: 18 }}
-              padding={{ top: 20, bottom: 60, left: 50, right: 10 }}
+              padding={{ top: 24, bottom: 64, left: 54, right: 12 }}
               containerComponent={<VictoryContainer responsive={false} />}
             >
               <VictoryAxis
@@ -104,10 +104,10 @@ export function InsightsCharts({ projectSummaries, categorySummaries }: Props) {
             <p className="muted chart-subtitle">Tregon kategorite qe peshojne me shume ne buxhetin total.</p>
             <VictoryChart
               theme={VictoryTheme.material}
-              width={280}
-              height={220}
+              width={300}
+              height={250}
               domainPadding={{ x: 16 }}
-              padding={{ top: 20, bottom: 60, left: 50, right: 10 }}
+              padding={{ top: 24, bottom: 64, left: 54, right: 12 }}
               containerComponent={<VictoryContainer responsive={false} />}
             >
               <VictoryAxis
@@ -143,9 +143,9 @@ export function InsightsCharts({ projectSummaries, categorySummaries }: Props) {
             <h3 className="chart-title">Pozicione sipas kategorise</h3>
             <p className="muted chart-subtitle">{totalCategoryCount} pozicione gjithsej, ne {sortedCategories.length} kategori.</p>
             <VictoryPie
-              width={280}
-              height={200}
-              innerRadius={45}
+              width={320}
+              height={220}
+              innerRadius={52}
               padAngle={2}
               colorScale={categoryColors}
               data={sortedCategories.map((c) => ({ x: '', y: c.count }))}
