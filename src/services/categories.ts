@@ -26,6 +26,17 @@ export async function ensureDefaultCategories(): Promise<DbCategory[]> {
   return list.sort((a, b) => a.name.localeCompare(b.name, 'sq'));
 }
 
+/** Fshin një kategori. Pozicionet që e përdornin (project_items.category_id) mbeten (bëhen
+ * "pa kategori", ON DELETE SET NULL) — s'fshihen vetë pozicionet. KUJDES: nëse kategoria është
+ * një nga ato "standarde" (DEFAULT_CATEGORIES), ensureDefaultCategories() do ta rikrijojë
+ * automatikisht herën tjetër që hapet Ballina/Regjistro — fshirja "mban" vetëm për kategori
+ * të krijuara vetë (jo-standarde). */
+export async function deleteCategory(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase nuk është i lidhur' };
+  const { error } = await supabase.from('categories').delete().eq('id', id);
+  return { error: error?.message ?? null };
+}
+
 export function groupItemsByProject<T extends { project_id: string; projects?: { name: string } | null; total_price: number }>(
   items: T[]
 ): { projectId: string; projectName: string; items: T[]; subtotal: number }[] {

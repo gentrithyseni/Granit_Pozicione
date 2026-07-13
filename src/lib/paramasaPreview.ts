@@ -78,13 +78,17 @@ export function groupRowsBySection(rows: ParsedRow[]): ParamasaSection[] {
     // sepse vetëm numri i pozicionit mund të mos përputhet me seksionin real — paramasa reale
     // shpesh kanë numërtim jo-konsistent (p.sh. pozicion "4.1" i vendosur gabimisht nën
     // seksionin III në vend të IV). Titulli real e rregullon këtë automatikisht.
-    const sectionKey = row.section_title || root || row.position_number || 'unknown';
+    const baseSectionKey = row.section_title || root || row.position_number || 'unknown';
+    // table_index përfshihet në çelës që pozicionet e dy dokumenteve krejt të ndryshme brenda
+    // të njëjtit skedar (p.sh. "6" nga Paramasa e Elektrikës vs "6.1" nga Arkitektura) të mos
+    // përzihen vetëm sepse ndajnë të njëjtin numër/titull rrënjë.
+    const sectionKey = `${row.table_index ?? 0}::${baseSectionKey}`;
 
     let existing = sections.get(sectionKey);
     if (!existing) {
       existing = {
         sectionKey,
-        sectionLabel: row.section_title || (isRomanRoot(sectionKey) || isNumericRoot(sectionKey) ? `${sectionKey}.` : sectionKey),
+        sectionLabel: row.section_title || (isRomanRoot(baseSectionKey) || isNumericRoot(baseSectionKey) ? `${baseSectionKey}.` : baseSectionKey),
         rows: [],
       };
       sections.set(sectionKey, existing);

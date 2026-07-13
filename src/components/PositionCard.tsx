@@ -38,6 +38,7 @@ type Props = {
   onEditFormChange?: (form: any) => void;
   onSave?: () => void;
   onCancel?: () => void;
+  onDelete?: () => void;
   categories?: DbCategory[];
 };
 
@@ -53,6 +54,7 @@ export function PositionCard({
   onEditFormChange,
   onSave,
   onCancel,
+  onDelete,
   categories = [],
 }: Props) {
   const modified = wasUpdated(item.created_at, item.updated_at);
@@ -297,6 +299,9 @@ export function PositionCard({
           )}
           {onCompareB && (
             <button type="button" className="card" onClick={onCompareB}>Krahasim B</button>
+          )}
+          {onDelete && (
+            <button type="button" className="card import-cancel-btn" onClick={onDelete}>Fshi</button>
           )}
         </div>
       )}

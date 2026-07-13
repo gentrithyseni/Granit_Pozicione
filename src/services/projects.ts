@@ -21,6 +21,22 @@ export async function updateProject(
   return { error: error?.message ?? null };
 }
 
+/** Fshin projektin dhe (nëpërmjet ON DELETE CASCADE në bazën e të dhënave) të gjitha
+ * pozicionet e tij (project_items) dhe kostot përkatëse (item_expenses) — pa hapa shtesë. */
+export async function deleteProject(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase nuk është i lidhur' };
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+  return { error: error?.message ?? null };
+}
+
+/** Fshin një pozicion të vetëm (project_items) — kostot e tij (item_expenses) fshihen
+ * automatikisht nga ON DELETE CASCADE. Historiku i çmimeve (price_history) ruhet (nuk fshihet). */
+export async function deletePosition(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase nuk është i lidhur' };
+  const { error } = await supabase.from('project_items').delete().eq('id', id);
+  return { error: error?.message ?? null };
+}
+
 export async function exportAllDataJson(): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: 'Supabase nuk është i lidhur' };
   const [projects, categories, items, expenses] = await Promise.all([

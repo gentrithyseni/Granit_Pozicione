@@ -56,6 +56,16 @@ export type SearchResultItem = DbProjectItem & {
   categories?: { name: string } | null;
 };
 
+export type DbLibriExport = {
+  id: string;
+  file_name: string;
+  positions_count: number;
+  total_value: number;
+  meta: Record<string, unknown>;
+  rows: unknown[];
+  created_at: string;
+};
+
 export type DbPriceHistory = {
   id: string;
   project_item_id?: string | null;

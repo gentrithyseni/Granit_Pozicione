@@ -72,7 +72,7 @@ export function ParamasaPreview({ rows, meta }: Props) {
                 <div>
                   <div className="paramasa-header-kicker">{meta.executorName || 'Kryesi i punes'}</div>
                   <strong>{meta.objectName || 'Objekti'}</strong>
-                  <div className="muted">{meta.sectionTitle || page.sectionLabel}</div>
+                  <div className="muted">{page.sectionLabel}</div>
                 </div>
                 <div className="paramasa-page-badge">Faqja {pageIndex + 1}</div>
               </header>

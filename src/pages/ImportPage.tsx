@@ -4,6 +4,7 @@ import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
 import { parseExcelWithValidation, type ParsedRow } from '../lib/excel';
 import { buildLibriNdertimorWorkbook, buildLibriNdertimorZip, downloadWorkbookBuffer, downloadBlob, planLibriExport } from '../lib/libriExport';
+import { saveLibriExportRecord, fetchLibriExportRecords, deleteLibriExportRecord, type LibriExportRecord } from '../services/libriExports';
 import { supabase } from '../lib/supabase';
 import type { DbProject } from '../types/database';
 
@@ -77,11 +78,18 @@ export function ImportPage() {
   });
   const [projects, setProjects] = useState<DbProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [libriHistory, setLibriHistory] = useState<LibriExportRecord[]>([]);
+  const [historyActionId, setHistoryActionId] = useState<string | null>(null);
   const { showToast } = useToast();
+
+  const reloadLibriHistory = () => {
+    fetchLibriExportRecords().then(setLibriHistory);
+  };
 
   useEffect(() => {
     if (!supabase) return;
     supabase.from('projects').select('*').order('created_at', { ascending: false }).then(({ data }) => data && setProjects(data));
+    reloadLibriHistory();
   }, []);
 
   // Vetëm plotëson fushat ende bosh kur zgjidhet një projekt — s'e prek asnjë fushë që
@@ -119,6 +127,12 @@ export function ImportPage() {
           `⚠ Kujdes: skedari thotë totali është ${fileTotal.toFixed(2)}€, por sistemi llogariti ${computedTotal.toFixed(2)}€ — diçka mund të mungojë.`,
           'error'
         );
+      }
+
+      if (parsedRows.length > 0) {
+        const mergedMeta = mergeBlankFields(previewMeta, suggested);
+        await saveLibriExportRecord(file.name, parsedRows, mergedMeta);
+        reloadLibriHistory();
       }
     } catch {
       showToast('Gabim gjatë leximit të Excel-it.', 'error');
@@ -173,6 +187,28 @@ export function ImportPage() {
   const handleAutoSuggestMeta = () => {
     const selectedProject = projects.find((project) => project.id === selectedProjectId);
     setPreviewMeta(suggestPreviewMeta(rows, fileName, selectedProject?.name || ''));
+  };
+
+  const handleRedownloadHistory = async (record: LibriExportRecord) => {
+    setHistoryActionId(record.id);
+    try {
+      const buffer = await buildLibriNdertimorWorkbook(record.rows, record.meta);
+      downloadWorkbookBuffer(buffer, `${normalizeBaseName(record.fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gabim gjatë rigjenerimit.', 'error');
+    } finally {
+      setHistoryActionId(null);
+    }
+  };
+
+  const handleDeleteHistory = async (id: string) => {
+    setHistoryActionId(id);
+    try {
+      await deleteLibriExportRecord(id);
+      reloadLibriHistory();
+    } finally {
+      setHistoryActionId(null);
+    }
   };
 
   const handlePageStartSuggestion = () => {
@@ -335,6 +371,44 @@ export function ImportPage() {
               <button className="card import-cancel-btn" type="button" onClick={() => setRows([])} disabled={loading}>Anulo</button>
             </div>
           </div>
+        )}
+
+        {libriHistory.length > 0 && (
+          <section className="panel panel-top-gap">
+            <h3 className="panel-heading-accent">Librat Ndërtimor të ruajtur</h3>
+            <p className="muted">Çdo paramasë e analizuar ruhet automatikisht këtu — mund ta rishkarkosh më vonë pa e ringarkuar skedarin origjinal.</p>
+            <div className="libri-history-list">
+              {libriHistory.map((record) => (
+                <div key={record.id} className="libri-history-row">
+                  <div className="libri-history-info">
+                    <strong>{record.fileName}</strong>
+                    <span className="muted">
+                      {new Date(record.createdAt).toLocaleDateString('sq-AL')} · {record.positionsCount} pozicione ·{' '}
+                      {record.totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })}€
+                    </span>
+                  </div>
+                  <div className="form-actions-row">
+                    <button
+                      type="button"
+                      className="card"
+                      onClick={() => handleRedownloadHistory(record)}
+                      disabled={historyActionId === record.id}
+                    >
+                      {historyActionId === record.id ? 'Duke u gjeneruar…' : 'Shkarko përsëri'}
+                    </button>
+                    <button
+                      type="button"
+                      className="card import-cancel-btn"
+                      onClick={() => handleDeleteHistory(record.id)}
+                      disabled={historyActionId === record.id}
+                    >
+                      Fshi
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </Shell>

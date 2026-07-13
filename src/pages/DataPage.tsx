@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { Shell } from '../components/Shell';
 import { CategoryProjectCompare } from '../components/CategoryProjectCompare';
 import { ComparePositions } from '../components/ComparePositions';
@@ -9,8 +9,8 @@ import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabase';
 import { exportProjectCSV } from '../services/export';
 import { fetchCategorySummaries } from '../services/insights';
-import { ensureDefaultCategories, groupItemsByProject } from '../services/categories';
-import { updateProject } from '../services/projects';
+import { ensureDefaultCategories, groupItemsByProject, deleteCategory } from '../services/categories';
+import { updateProject, deleteProject, deletePosition } from '../services/projects';
 import { recordPriceSnapshot } from '../services/priceHistory';
 import { PriceHistoryDashboard } from '../components/PriceHistoryDashboard';
 import type { CategorySummary, DbCategory, DbProject, DbProjectItem, ItemWithMeta } from '../types/database';
@@ -157,6 +157,52 @@ export function DataPage() {
     }
     showToast('Projekti u përditësua.', 'success');
     await reloadProjects();
+  };
+
+  const handleDeleteProject = async () => {
+    if (!selectedProject) return;
+    const confirmed = window.confirm(
+      `Të fshihet plotësisht projekti "${selectedProject.name}"? Kjo do të fshijë edhe të gjitha pozicionet e tij. Veprim i pakthyeshëm.`
+    );
+    if (!confirmed) return;
+    const { error } = await deleteProject(selectedProject.id);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    showToast('Projekti u fshi.', 'success');
+    setSelectedProject(null);
+    await reloadProjects();
+  };
+
+  const handleDeletePosition = async (item: DbProjectItem) => {
+    const confirmed = window.confirm(`Të fshihet pozicioni "${item.description}"? Veprim i pakthyeshëm.`);
+    if (!confirmed) return;
+    const { error } = await deletePosition(item.id);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    showToast('Pozicioni u fshi.', 'success');
+    if (selectedProject) await loadProjectDetails(selectedProject);
+    if (selectedCategory) await loadCategoryDetails(selectedCategory);
+  };
+
+  const handleDeleteCategory = async (category: DbCategory, event: MouseEvent) => {
+    event.stopPropagation();
+    const confirmed = window.confirm(
+      `Të fshihet kategoria "${category.name}"? Pozicionet që e përdorin mbeten (bëhen "pa kategori"). Kujdes: nëse është kategori standarde, mund të rikrijohet automatikisht herën tjetër.`
+    );
+    if (!confirmed) return;
+    const { error } = await deleteCategory(category.id);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+    showToast('Kategoria u fshi.', 'success');
+    const cats = await ensureDefaultCategories();
+    setCategoriesList(cats);
+    if (selectedCategory?.id === category.id) setSelectedCategory(null);
   };
 
   const analyzeSelectedProject = () => {
@@ -342,6 +388,7 @@ export function DataPage() {
           onEditFormChange={setEditForm}
           onSave={saveRowEdit}
           onCancel={() => setEditingId(null)}
+          onDelete={() => handleDeletePosition(item)}
           categories={categoriesList}
         />
       ))}
@@ -474,6 +521,7 @@ export function DataPage() {
             <div className="form-actions-row">
               <button type="button" className="primary-button" onClick={saveProjectMeta}>Ruaj projektin</button>
               <button type="button" className="card" onClick={analyzeSelectedProject}>Kontrollo projektin</button>
+              <button type="button" className="card import-cancel-btn" onClick={handleDeleteProject}>Fshi projektin</button>
             </div>
           </div>
 
@@ -501,9 +549,14 @@ export function DataPage() {
 
       {selectedCategory && (
         <section className="panel panel-top-gap">
-          <h3 className="panel-heading-accent">
-            Kategoria: {selectedCategory.name} — {categoryItems.length} pozicione, {categoryGroups.length} projekte
-          </h3>
+          <div className="panel-heading-row">
+            <h3 className="panel-heading-accent">
+              Kategoria: {selectedCategory.name} — {categoryItems.length} pozicione, {categoryGroups.length} projekte
+            </h3>
+            <button type="button" className="card import-cancel-btn" onClick={(e) => handleDeleteCategory(selectedCategory, e)}>
+              Fshi kategorinë
+            </button>
+          </div>
 
           <CategoryProjectCompare groups={categoryGroups} categoryName={selectedCategory.name} />
 

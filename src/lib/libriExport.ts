@@ -228,7 +228,7 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
   const offerPositionsList = positions.map((p) => p.positionNumber).filter(Boolean).join(', ');
   setCell(ws, headerSlot.sectionAccountRow, 6, `  No ${page.sectionLabel.replace(/\.$/, '')}`);
   setCell(ws, headerSlot.sectionPositionsRow, 8, `   No  ${offerPositionsList || meta.offerPositions || ''}`);
-  setCell(ws, headerSlot.sectionTitleRow, 1, page.sectionLabel || meta.sectionTitle);
+  setCell(ws, headerSlot.sectionTitleRow, 1, page.sectionLabel);
 
   const distinctUnits = Array.from(new Set(positions.map((p) => p.unit).filter(Boolean)));
   const unitLabel = distinctUnits.length > 1 ? distinctUnits.join(' / ') : positions[0]?.unit || '';

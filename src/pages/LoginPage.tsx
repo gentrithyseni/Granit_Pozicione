@@ -55,11 +55,11 @@ export function LoginPage() {
           </label>
           <label>
             Fjalëkalimi
-            <input type="password" autoComplete="current-password" {...register('password', { required: true })} />
+            <input type="password" autoComplete="current-password" {...register('password', { required: true })} placeholder="********" />
           </label>
           {error && <p className="auth-error" role="alert">{error}</p>}
           <button className="primary-button" type="submit" disabled={loading}>
-            {loading ? 'Duke u futur...' : 'Hyr'}
+            {loading ? 'Logging in...' : 'Hyr'}
           </button>
         </form>
       </div>

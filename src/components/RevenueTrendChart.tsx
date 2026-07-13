@@ -1,4 +1,4 @@
-import { VictoryAxis, VictoryChart, VictoryLine, VictoryTheme, VictoryContainer, VictoryTooltip, VictoryArea } from 'victory';
+import { VictoryAxis, VictoryChart, VictoryLine, VictoryTheme, VictoryContainer, VictoryArea, VictoryScatter, VictoryLabel } from 'victory';
 import type { MonthlyRevenuePoint } from '../services/insights';
 
 type Props = {
@@ -17,11 +17,7 @@ export function RevenueTrendChart({ points }: Props) {
     );
   }
 
-  const chartData = points.map((point, index) => ({
-    x: index + 1,
-    y: point.total,
-    label: `${point.label}\n${point.total.toLocaleString('sq-AL', { maximumFractionDigits: 0 })}€`,
-  }));
+  const chartData = points.map((point, index) => ({ x: index + 1, y: point.total }));
 
   const first = points[0].total;
   const last = points[points.length - 1].total;
@@ -30,21 +26,21 @@ export function RevenueTrendChart({ points }: Props) {
   return (
     <div>
       <div className="price-history-chart-box">
-        <VictoryChart theme={VictoryTheme.material} width={600} height={220} containerComponent={<VictoryContainer responsive={false} />}>
+        <VictoryChart theme={VictoryTheme.material} width={640} height={240} padding={{ top: 30, bottom: 45, left: 60, right: 20 }} containerComponent={<VictoryContainer responsive={false} />}>
           <VictoryAxis
             tickValues={chartData.map((d) => d.x)}
             tickFormat={(t: number) => points[t - 1]?.label || ''}
-            style={{ tickLabels: { fontSize: 8, angle: 0 } }}
+            style={{ tickLabels: { fontSize: 11, angle: -20, textAnchor: 'end' } }}
           />
-          <VictoryAxis dependentAxis tickFormat={(t) => `${(t / 1000).toFixed(0)}k€`} style={{ tickLabels: { fontSize: 9 } }} />
-          <VictoryArea
+          <VictoryAxis dependentAxis tickFormat={(t) => `${(t / 1000).toFixed(0)}k€`} style={{ tickLabels: { fontSize: 11 } }} />
+          <VictoryArea data={chartData} style={{ data: { fill: 'var(--primary-soft)', stroke: 'none' } }} />
+          <VictoryLine data={chartData} style={{ data: { stroke: 'var(--primary, #6366f1)', strokeWidth: 2.5 } }} />
+          <VictoryScatter
             data={chartData}
-            style={{ data: { fill: 'var(--primary-soft)', stroke: 'none' } }}
-          />
-          <VictoryLine
-            data={chartData}
-            style={{ data: { stroke: 'var(--primary, #6366f1)', strokeWidth: 2 } }}
-            labelComponent={<VictoryTooltip />}
+            size={4}
+            style={{ data: { fill: 'var(--primary, #6366f1)' } }}
+            labels={({ datum }: { datum: { y: number } }) => `${(datum.y / 1000).toFixed(1)}k€`}
+            labelComponent={<VictoryLabel dy={-12} style={{ fontSize: 10, fontWeight: 700, fill: 'var(--primary, #6366f1)' }} />}
           />
         </VictoryChart>
       </div>
