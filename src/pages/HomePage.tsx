@@ -5,7 +5,7 @@ import { Shell } from '../components/Shell';
 import { StatusBadge } from '../components/StatusBadge';
 import { InsightsCharts } from '../components/InsightsCharts';
 import { hasSupabaseConfig } from '../lib/supabase';
-import { RevenueTrendChart } from '../components/Revenuetrendchart';
+import { RevenueTrendChart } from '../components/RevenueTrendChart';
 import { supabase } from '../lib/supabase';
 import { fetchCompletedProjects } from '../services/projects';
 import { fetchDashboardStats } from '../services/stats';
