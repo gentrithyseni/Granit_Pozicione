@@ -1335,7 +1335,6 @@ input:focus, select:focus {
   border-radius: 14px;
   font-weight: 600;
   box-shadow: var(--shadow);
-  .project-status-overview { grid-template-columns: 1fr; }
   border: 1px solid var(--border);
   animation: toast-in 0.25s ease;
 }
@@ -1378,4 +1377,57 @@ input:focus, select:focus {
 
 @media (max-width: 1280px) and (min-width: 901px) {
   .charts-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* --- Paneli i Validimit + "Shiko faqen" (facsimile) --- */
+.paramasa-page-btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.libri-facsimile {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 0.82rem;
+  background: var(--surface-alt);
+  display: grid;
+  gap: 8px;
+}
+.libri-fac-row { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.libri-fac-right { text-align: right; }
+.libri-fac-kicker { font-weight: 700; }
+.libri-fac-kicker-sub { font-size: 0.72rem; color: var(--muted); }
+.libri-fac-title { font-weight: 800; font-size: 0.95rem; color: var(--primary); }
+.libri-fac-section-title { font-weight: 700; text-align: center; padding: 4px 0; border-top: 1px dashed var(--border); border-bottom: 1px dashed var(--border); }
+.libri-fac-offer-row, .libri-fac-unit-row { font-size: 0.78rem; color: var(--muted); }
+.libri-fac-position { border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: grid; gap: 6px; }
+.libri-fac-desc { line-height: 1.5; }
+.libri-fac-measure-row, .libri-fac-total-row { display: flex; justify-content: space-between; }
+.libri-fac-signatures { display: flex; justify-content: space-between; margin-top: 10px; font-size: 0.78rem; flex-wrap: wrap; gap: 10px; }
+.libri-fac-edit-hint {
+  font-size: 0.78rem;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.libri-fac-edit-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
+}
+.libri-fac-edit-label { display: grid; gap: 3px; font-size: 0.72rem; color: var(--muted); }
+.libri-fac-edit-label input, .libri-fac-edit-label textarea {
+  font-size: 0.82rem;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+.libri-fac-edit-desc textarea { resize: vertical; font-family: inherit; }
+
+.validation-section-list { display: grid; gap: 8px; margin-top: 12px; }
+.validation-section-row {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  align-items: center;
+  gap: 10px;
 }

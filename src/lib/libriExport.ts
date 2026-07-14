@@ -130,34 +130,41 @@ export function buildLibriExportPositions(rows: ParsedRow[]): LibriExportPositio
     }
 
     const qty = Number(row.quantity || 0);
+    const unitPrice = Number(row.unit_price || 0);
+    const lineTotal = Number(row.total_price || 0) || qty * unitPrice;
     return {
       positionNumber: row.position_number,
       description: row.description,
       unit: row.unit,
-      lines: [{ label: `${qty.toFixed(2)} x 1.00  = ${qty.toFixed(2)}`, value: qty }],
-      total: qty,
+      lines: [{ label: `${qty.toFixed(2)} x ${unitPrice.toFixed(2)}  = ${lineTotal.toFixed(2)}`, value: lineTotal }],
+      total: lineTotal,
     };
   });
 }
 
 export type LibriExportPlanPage = {
   templateId: TemplateId;
+  sectionKey: string;
   sectionLabel: string;
   rows: ParsedRow[];
   overflowWarning: boolean;
   mixedUnitsWarning: boolean;
 };
 
-/** Planifikimi (pa gjeneruar akoma xlsx) — i dobishëm për ta shfaqur në UI para shkarkimit. */
-export function planLibriExport(rows: ParsedRow[]): LibriExportPlanPage[] {
+/** Planifikimi (pa gjeneruar akoma xlsx) — i dobishëm për ta shfaqur në UI para shkarkimit.
+ * `sectionTitleOverrides` (opsional): titujt e seksioneve të redaktuar dorazi nga përdoruesi
+ * te "Paneli i Validimit", çelësi është `section.sectionKey`. */
+export function planLibriExport(rows: ParsedRow[], sectionTitleOverrides?: Record<string, string>): LibriExportPlanPage[] {
   const sections = groupRowsBySection(rows);
   const plan: LibriExportPlanPage[] = [];
   sections.forEach((section) => {
     const pages: LibriPage[] = packSectionIntoPages(section.rows);
+    const label = sectionTitleOverrides?.[section.sectionKey] || section.sectionLabel;
     pages.forEach((page) => {
       plan.push({
         templateId: page.templateId,
-        sectionLabel: section.sectionLabel,
+        sectionKey: section.sectionKey,
+        sectionLabel: label,
         rows: page.rows,
         overflowWarning: page.overflowWarning,
         mixedUnitsWarning: page.mixedUnitsWarning,
@@ -175,9 +182,10 @@ export function planLibriExport(rows: ParsedRow[]): LibriExportPlanPage[] {
 export async function buildLibriNdertimorWorkbook(
   rows: ParsedRow[],
   meta: ParamasaPreviewMeta,
-  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook
+  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook,
+  sectionTitleOverrides?: Record<string, string>
 ): Promise<ArrayBuffer> {
-  const plan = planLibriExport(rows);
+  const plan = planLibriExport(rows, sectionTitleOverrides);
   const output = new ExcelJS.Workbook();
   output.creator = 'Graniti Web';
   output.created = new Date();
@@ -223,6 +231,15 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
   setCell(ws, FIXED_CELLS.month.row, FIXED_CELLS.month.col, `Muaji-Month ${meta.month || ''}`.trim());
   setCell(ws, FIXED_CELLS.executor.row, FIXED_CELLS.executor.col, `Kryerësi i punëve "${meta.executorName || ''}" `);
   setCell(ws, FIXED_CELLS.object.row, FIXED_CELLS.object.col, `Objekti-Building : ${meta.objectName || ''}`);
+
+  // Shabllonet origjinale (kopjuar nga një projekt real konkret) kanë tekst STATIK të ngulitur
+  // në disa rreshta — vazhdimi i "Objekti-Building" (F4-F6, p.sh. "- Renovimi i zyrave... në
+  // Gjilan") dhe një përshkrim i përgjithshëm projekti (rreshtat 9-10, p.sh. "PARAMASA DHE
+  // PARALLOGARITJA... LAGJA QAFA"). Këto ishin specifike për projektin origjinal të shabllonit
+  // dhe s'kanë lidhje me paramasën aktuale — duhet pastruar EKSPLICITISHT, përndryshe mbeten
+  // të dukshme në çdo faqe të re (raportuar nga përdoruesi: "po del paramasa e vjetër").
+  [4, 5, 6].forEach((row) => setCell(ws, row, 6, ''));
+  [9, 10].forEach((row) => setCell(ws, row, 1, ''));
 
   const headerSlot = slots[0];
   const offerPositionsList = positions.map((p) => p.positionNumber).filter(Boolean).join(', ');
@@ -300,9 +317,10 @@ export function downloadWorkbookBuffer(buffer: ArrayBuffer, fileName: string): v
 export async function buildLibriNdertimorZip(
   rows: ParsedRow[],
   meta: ParamasaPreviewMeta,
-  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook
+  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook,
+  sectionTitleOverrides?: Record<string, string>
 ): Promise<Blob> {
-  const plan = planLibriExport(rows);
+  const plan = planLibriExport(rows, sectionTitleOverrides);
   const zip = new JSZip();
   const usedNames = new Set<string>();
 

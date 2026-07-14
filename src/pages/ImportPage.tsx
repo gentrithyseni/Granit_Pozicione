@@ -1,8 +1,9 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { ParamasaPreview, type ParamasaPreviewMeta } from '../components/ParamasaPreview';
 import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
 import { parseExcelWithValidation, type ParsedRow } from '../lib/excel';
+import { groupRowsBySection } from '../lib/paramasaPreview';
 import { buildLibriNdertimorWorkbook, buildLibriNdertimorZip, downloadWorkbookBuffer, downloadBlob, planLibriExport } from '../lib/libriExport';
 import { saveLibriExportRecord, fetchLibriExportRecords, deleteLibriExportRecord, type LibriExportRecord } from '../services/libriExports';
 import { supabase } from '../lib/supabase';
@@ -62,6 +63,9 @@ function mergeBlankFields(current: ParamasaPreviewMeta, suggested: ParamasaPrevi
 export function ImportPage() {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
+  const [sectionTitleOverrides, setSectionTitleOverrides] = useState<Record<string, string>>({});
+
+  const detectedSections = useMemo(() => groupRowsBySection(rows), [rows]);
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
   const [previewMode, setPreviewMode] = useState<'table' | 'preview'>('preview');
@@ -113,6 +117,7 @@ export function ImportPage() {
     setFileName(file.name);
     setRows([]);
     setDeclaredTotal(null);
+    setSectionTitleOverrides({});
     try {
       const { rows: parsedRows, declaredTotal: fileTotal } = await parseExcelWithValidation(file);
       setRows(parsedRows);
@@ -149,8 +154,8 @@ export function ImportPage() {
     if (rows.length === 0) return;
     setLibriExportLoading(true);
     try {
-      const plan = planLibriExport(rows);
-      const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta);
+      const plan = planLibriExport(rows, sectionTitleOverrides);
+      const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta, undefined, sectionTitleOverrides);
       downloadWorkbookBuffer(buffer, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
       const overflowPages = plan.filter((page) => page.overflowWarning).length;
       const mixedPages = plan.filter((page) => page.mixedUnitsWarning).length;
@@ -173,8 +178,8 @@ export function ImportPage() {
     if (rows.length === 0) return;
     setZipExportLoading(true);
     try {
-      const plan = planLibriExport(rows);
-      const blob = await buildLibriNdertimorZip(rows, previewMeta);
+      const plan = planLibriExport(rows, sectionTitleOverrides);
+      const blob = await buildLibriNdertimorZip(rows, previewMeta, undefined, sectionTitleOverrides);
       downloadBlob(blob, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor-faqet.zip`);
       showToast(`ZIP u shkarkua: ${plan.length} skedarë, një për çdo faqe.`, 'success');
     } catch (error) {
@@ -182,6 +187,10 @@ export function ImportPage() {
     } finally {
       setZipExportLoading(false);
     }
+  };
+
+  const handleUpdateRow = (row: ParsedRow, changes: Partial<ParsedRow>) => {
+    setRows((current) => current.map((r) => (r === row ? { ...r, ...changes } : r)));
   };
 
   const handleAutoSuggestMeta = () => {
@@ -298,6 +307,30 @@ export function ImportPage() {
           );
         })()}
 
+        {rows.length > 0 && !loading && detectedSections.length > 0 && (
+          <section className="panel panel-top-gap">
+            <h3 className="panel-title">Paneli i Validimit — kontrollo titujt e seksioneve</h3>
+            <p className="muted field-hint">
+              Kontrollo titujt e mëposhtëm para se të krijohen faqet e Librit — nëse ndonjë del bosh ose gabim (p.sh. "3." në vend të
+              "3. Punët e Ujit"), redaktoje këtu; ndryshimi zbatohet automatikisht te Preview dhe te çdo shkarkim.
+            </p>
+            <div className="validation-section-list">
+              {detectedSections.map((section) => (
+                <label key={section.sectionKey} className="validation-section-row">
+                  <span className="muted">{section.rows.length} poz.</span>
+                  <input
+                    type="text"
+                    value={sectionTitleOverrides[section.sectionKey] ?? section.sectionLabel}
+                    onChange={(e) =>
+                      setSectionTitleOverrides((current) => ({ ...current, [section.sectionKey]: e.target.value }))
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+          </section>
+        )}
+
         {rows.length > 0 && !loading && (
           <div className="import-preview-toolbar import-preview-head">
             <strong>Preview i paramasës</strong>
@@ -323,7 +356,7 @@ export function ImportPage() {
                   <span className="muted">Faqet paketohen automatikisht (auto) — motori i sigurt që s'i përzien seksionet.</span>
                 </div>
 
-                <ParamasaPreview rows={rows} meta={previewMeta} />
+                <ParamasaPreview rows={rows} meta={previewMeta} sectionTitleOverrides={sectionTitleOverrides} onUpdateRow={handleUpdateRow} />
               </>
             ) : (
               <>

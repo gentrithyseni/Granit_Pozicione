@@ -13,7 +13,7 @@ const modeCopy: Record<AuthMode, { title: string; description: string; submit: s
   login: {
     title: 'Hyrje ne panel',
     description: 'Shkruaj email dhe password.',
-    submit: 'Hyr',
+    submit: 'Login',
     loading: 'Duke hyre...',
   },
   register: {
@@ -152,14 +152,14 @@ export function LoginPage() {
             {theme === 'light' ? <MoonStar size={18} /> : <SunMedium size={18} />} {theme === 'light' ? 'Dark' : 'Light'}
           </button>
         </div>
-        <div className="eyebrow accent">Graniti</div>
+        <div className="eyebrow accent">Sistem Menaxhimi për Projekte dhe Oferta</div>
         <h1>{copy.title}</h1>
         <p className="muted">{copy.description}</p>
 
         {mode !== 'updatePassword' && (
           <div className="auth-tabs" aria-label="Auth options">
             <button type="button" className={mode === 'login' ? 'active' : ''} onClick={() => changeMode('login')}>
-              Hyrje
+              Login
             </button>
             <button type="button" className={mode === 'register' ? 'active' : ''} onClick={() => changeMode('register')}>
               Regjistrohu
