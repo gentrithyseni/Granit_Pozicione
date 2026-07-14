@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Database, FileUp, WalletCards, TrendingUp, PieChart } from 'lucide-react';
+import { Database, FileUp, WalletCards, TrendingUp, PieChart, ReceiptText } from 'lucide-react';
 import { Shell } from '../components/Shell';
 import { StatusBadge } from '../components/StatusBadge';
 import { InsightsCharts } from '../components/InsightsCharts';
@@ -100,6 +100,11 @@ export function HomePage() {
           <div className="card-icon"><WalletCards size={22} /></div>
           <h2>Regjistro</h2>
           <p>Llogarit dhe ruaj një pozicion me kosto të detajuara.</p>
+        </NavLink>
+        <NavLink className="big-card card" to="/fature">
+          <div className="card-icon"><ReceiptText size={22} /></div>
+          <h2>Krijo Fature</h2>
+          <p>Ngarko shabllonin e faturës dhe plotëso fushat që ndryshojnë.</p>
         </NavLink>
         <NavLink className="big-card card" to="/import">
           <div className="card-icon"><FileUp size={22} /></div>

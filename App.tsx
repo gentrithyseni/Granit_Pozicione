@@ -6,6 +6,7 @@ import { ToastProvider } from './src/context/ToastContext';
 import { ProtectedRoute } from './src/components/ProtectedRoute';
 import { HomePage } from './src/pages/HomePage';
 import { RegisterPage } from './src/pages/RegisterPage';
+import { InvoicePage } from './src/pages/InvoicePage';
 import { ImportPage } from './src/pages/ImportPage';
 import { DataPage } from './src/pages/DataPage';
 import { SearchPage } from './src/pages/SearchPage';
@@ -33,6 +34,14 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <RegisterPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/fature"
+              element={
+                <ProtectedRoute>
+                  <InvoicePage />
                 </ProtectedRoute>
               }
             />

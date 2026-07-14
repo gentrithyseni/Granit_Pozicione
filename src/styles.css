@@ -315,6 +315,132 @@ button, input, select { font: inherit; }
   gap: 14px;
 }
 
+.invoice-page {
+  display: grid;
+  gap: 18px;
+}
+
+.invoice-upload-panel,
+.invoice-fields-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
+.invoice-upload-head,
+.invoice-preview-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.invoice-upload-badge,
+.invoice-preview-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.invoice-upload-dropzone {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 24px;
+  border-radius: 20px;
+  border: 1.5px dashed var(--border);
+  background: var(--surface);
+  text-align: center;
+  cursor: pointer;
+}
+
+.invoice-upload-dropzone strong { font-size: 1.05rem; }
+
+.invoice-upload-action {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--btn-text);
+  font-weight: 700;
+}
+
+.invoice-upload-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.invoice-file-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.invoice-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.invoice-form-grid label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invoice-label-icon {
+  color: var(--primary);
+}
+
+.invoice-preview-panel {
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.invoice-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.invoice-preview-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+
+.invoice-preview-grid strong {
+  font-size: 1rem;
+  word-break: break-word;
+}
+
+.invoice-preview-note {
+  margin: 16px 0 0;
+  max-width: 70ch;
+}
+
 label { display: grid; gap: 8px; font-size: 0.92rem; }
 
 input, select {

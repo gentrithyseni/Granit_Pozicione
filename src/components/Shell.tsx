@@ -22,6 +22,10 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="sidebar-nav-icon">📝</span>
             <span className="sidebar-nav-text"> Regjistro </span>
           </NavLink>
+          <NavLink to="/fature">
+            <span className="sidebar-nav-icon">🧾</span>
+            <span className="sidebar-nav-text"> Krijo Fature </span>
+          </NavLink>
           <NavLink to="/import">
             <span className="sidebar-nav-icon">📊</span>
             <span className="sidebar-nav-text"> Krijo Libër Ndërtimor </span>
