@@ -29,6 +29,36 @@ const FIXED_CELLS = {
   unit: { row: 13, col: 6 }, // F13
 };
 
+const ROMAN_NUMERALS: Array<[number, string]> = [
+  [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
+  [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+];
+
+function toRomanNumeral(num: number): string {
+  let remaining = num;
+  let result = '';
+  for (const [value, symbol] of ROMAN_NUMERALS) {
+    while (remaining >= value) {
+      result += symbol;
+      remaining -= value;
+    }
+  }
+  return result || String(num);
+}
+
+/** "Llogaria me ofertë" duhet të jetë VETËM numri romak i seksionit (p.sh. "II"), kurrë teksti
+ * i plotë i titullit (p.sh. jo "2.PUNIMET E DHEUT..." i tërë). E nxjerr rrënjën numerike nga
+ * sectionLabel (qoftë arab "2.Titulli..." ose tashmë romak "II Titulli...") dhe e kthen
+ * gjithmonë në numër romak për shfaqje. */
+export function extractSectionAccountNumber(sectionLabel: string): string {
+  const trimmed = sectionLabel.trim();
+  const romanMatch = /^([IVXLCDM]+)\b/i.exec(trimmed);
+  if (romanMatch) return romanMatch[1].toUpperCase();
+  const arabicMatch = /^(\d+)/.exec(trimmed);
+  if (arabicMatch) return toRomanNumeral(Number(arabicMatch[1]));
+  return trimmed;
+}
+
 function sanitizeSheetName(name: string): string {
   const cleaned = name.replace(/[*?:/\\[\]]/g, ' ').trim();
   return (cleaned || 'Faqja').slice(0, 31);
@@ -243,7 +273,7 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
 
   const headerSlot = slots[0];
   const offerPositionsList = positions.map((p) => p.positionNumber).filter(Boolean).join(', ');
-  setCell(ws, headerSlot.sectionAccountRow, 6, `  No ${page.sectionLabel.replace(/\.$/, '')}`);
+  setCell(ws, headerSlot.sectionAccountRow, 6, `  No ${extractSectionAccountNumber(page.sectionLabel)}`);
   setCell(ws, headerSlot.sectionPositionsRow, 8, `   No  ${offerPositionsList || meta.offerPositions || ''}`);
   setCell(ws, headerSlot.sectionTitleRow, 1, page.sectionLabel);
 

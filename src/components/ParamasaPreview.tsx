@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ParsedRow } from '../lib/excel';
-import { planLibriExport, buildLibriExportPositions, buildLibriSinglePageWorkbook, downloadWorkbookBuffer } from '../lib/libriExport';
+import { planLibriExport, buildLibriExportPositions, buildLibriSinglePageWorkbook, downloadWorkbookBuffer, extractSectionAccountNumber } from '../lib/libriExport';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 
 export type { ParamasaPreviewMeta };
@@ -120,7 +120,7 @@ export function ParamasaPreview({ rows, meta, sectionTitleOverrides, onUpdateRow
                   </div>
                   <div className="libri-fac-section-title">{page.sectionLabel || '—'}</div>
                   <div className="libri-fac-row libri-fac-offer-row">
-                    <div>Llogaria me ofertë: <strong>No {page.sectionLabel?.replace(/\.$/, '') || '—'}</strong></div>
+                    <div>Llogaria me ofertë: <strong>No {page.sectionLabel ? extractSectionAccountNumber(page.sectionLabel) : '—'}</strong></div>
                     <div className="libri-fac-right">Poz. Me ofertë: <strong>{positions.map((p) => p.positionNumber).join(', ') || '—'}</strong></div>
                   </div>
                   <div className="libri-fac-row libri-fac-unit-row">
@@ -225,7 +225,7 @@ export function ParamasaPreview({ rows, meta, sectionTitleOverrides, onUpdateRow
                 </div>
                 <div>
                   <span>Llogaria me ofertë</span>
-                  <strong>No {page.sectionLabel?.replace(/\.$/, '') || '—'}</strong>
+                  <strong>No {page.sectionLabel ? extractSectionAccountNumber(page.sectionLabel) : '—'}</strong>
                 </div>
                 <div>
                   <span>Poz. me ofertë</span>

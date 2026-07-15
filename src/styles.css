@@ -724,6 +724,8 @@ input:focus, select:focus {
 }
 .libri-history-info { display: flex; flex-direction: column; gap: 2px; }
 
+.libri-history-preview { width: 100%; margin-top: 14px; }
+
 .import-total-warning {
   margin-top: 14px;
   padding: 12px 16px;

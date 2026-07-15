@@ -83,6 +83,7 @@ export function ImportPage() {
   const [projects, setProjects] = useState<DbProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [libriHistory, setLibriHistory] = useState<LibriExportRecord[]>([]);
+  const [viewingHistoryId, setViewingHistoryId] = useState<string | null>(null);
   const [historyActionId, setHistoryActionId] = useState<string | null>(null);
   const { showToast } = useToast();
 
@@ -244,7 +245,7 @@ export function ImportPage() {
           <div className="form-grid import-meta-grid">
             <label className="full-width-field">
               Kryesi i punes
-              <input value={previewMeta.executorName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, executorName: e.target.value }))} placeholder="p.sh. Graniti SH.P.K." />
+              <input value={previewMeta.executorName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, executorName: e.target.value }))} defaultValue="Megrant ING SH.P.K" placeholder="p.sh. Megrant ING SH.P.K" />
             </label>
             <label>
               Muaji
@@ -424,6 +425,13 @@ export function ImportPage() {
                     <button
                       type="button"
                       className="card"
+                      onClick={() => setViewingHistoryId(viewingHistoryId === record.id ? null : record.id)}
+                    >
+                      {viewingHistoryId === record.id ? 'Mbyll pamjen' : 'Shiko librat-faqet'}
+                    </button>
+                    <button
+                      type="button"
+                      className="card"
                       onClick={() => handleRedownloadHistory(record)}
                       disabled={historyActionId === record.id}
                     >
@@ -438,6 +446,12 @@ export function ImportPage() {
                       Fshi
                     </button>
                   </div>
+
+                  {viewingHistoryId === record.id && (
+                    <div className="libri-history-preview">
+                      <ParamasaPreview rows={record.rows} meta={record.meta} />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
