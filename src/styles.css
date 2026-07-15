@@ -320,6 +320,7 @@ button, input, select { font: inherit; }
   gap: 18px;
 }
 
+.invoice-type-panel,
 .invoice-upload-panel,
 .invoice-fields-panel {
   display: grid;
@@ -328,6 +329,114 @@ button, input, select { font: inherit; }
   border-radius: 22px;
   background: var(--surface-alt);
   border: 1px solid var(--border);
+}
+
+.invoice-type-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.invoice-type-btn {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.invoice-type-btn.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.invoice-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.invoice-section + .invoice-section {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.invoice-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.invoice-section-note {
+  margin: 0;
+  max-width: 72ch;
+}
+
+.invoice-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invoice-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.invoice-actions .primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.invoice-add-row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invoice-positions-list {
+  display: grid;
+  gap: 12px;
+}
+
+.invoice-position-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.invoice-position-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.danger-link {
+  color: var(--danger, #c0392b);
+}
+
+textarea {
+  width: 100%;
+  min-height: 96px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px 14px;
+  font: inherit;
+  resize: vertical;
 }
 
 .invoice-upload-head,
@@ -1022,13 +1131,13 @@ input:focus, select:focus {
 .compare-hint { margin: 0 0 14px; }
 .compare-selects {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 16px;
 }
 .compare-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
 }
 .compare-column {
@@ -1036,17 +1145,20 @@ input:focus, select:focus {
   border-radius: 16px;
   background: var(--surface-alt);
   border: 1px solid var(--border);
+  min-width: 0;
+  overflow-wrap: break-word;
 }
+
 .compare-column-title { margin: 0 0 4px; color: var(--primary); }
 .compare-dl {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 6px 12px;
   margin: 12px 0 0;
   font-size: 0.9rem;
 }
 .compare-dl dt { color: var(--muted); font-weight: 600; }
-.compare-dl dd { margin: 0; }
+.compare-dl dd { margin: 0; word-break: break-word; }
 .compare-total { font-weight: 800; color: var(--primary); }
 .diff-up { color: #f87171; font-weight: 700; }
 .diff-down { color: var(--primary); font-weight: 700; }

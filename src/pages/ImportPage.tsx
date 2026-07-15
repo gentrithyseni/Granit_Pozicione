@@ -72,7 +72,7 @@ export function ImportPage() {
   const [libriExportLoading, setLibriExportLoading] = useState(false);
   const [zipExportLoading, setZipExportLoading] = useState(false);
   const [previewMeta, setPreviewMeta] = useState<ParamasaPreviewMeta>({
-    executorName: '',
+    executorName: 'Megrant ING SH.P.K',
     month: '',
     date: new Date().toLocaleDateString('sq-AL'),
     objectName: '',
@@ -245,7 +245,7 @@ export function ImportPage() {
           <div className="form-grid import-meta-grid">
             <label className="full-width-field">
               Kryesi i punes
-              <input value={previewMeta.executorName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, executorName: e.target.value }))} defaultValue="Megrant ING SH.P.K" placeholder="p.sh. Megrant ING SH.P.K" />
+              <input value={previewMeta.executorName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, executorName: e.target.value }))} placeholder="p.sh. Megrant ING SH.P.K" />
             </label>
             <label>
               Muaji
