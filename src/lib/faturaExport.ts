@@ -3,42 +3,70 @@ import type { FaturaKind, FaturaKontrateFields, FaturaPozicioneFields, FaturaPos
 import { downloadWorkbookBuffer } from './libriExport';
 
 const TEMPLATE_URLS: Record<FaturaKind, string> = {
-  kontrate: '/templates/Fatura-Shabllon-Kontrate.xlsx',
+  kontrate: '/templates/Fatura - Shabllon - Kontrate.xlsx',
   pozicione: '/templates/Fletedergese-Shabllon-Pozicione.xlsx',
 };
 
-const KONTRATE_TITLE_ROWS = [30, 31, 32, 33, 34, 35] as const;
-const KONTRATE_REFERENCE_ROWS = [30, 31, 32, 33, 34, 35] as const;
-const POZICIONE_FIRST_ROW = 25;
-const POZICIONE_TEMPLATE_ROWS = 4;
-const POZICIONE_TOTAL_ROW_BASE = 29;
+// ── Kontratë ─────────────────────────────────────────────────────────────────
+// Koordinata të verifikuara drejtpërdrejt nga shablloni real (python/openpyxl):
+//   A30:C36  → titulli i kontratës (NJË qelizë e bashkuar me wrapText)
+//   D30:E31  → numri i kontratës
+//   F30:G36  → referenca e faturës  (NJË qelizë e bashkuar me wrapText)
+//   H31/I31/J31 → formulas vlera pa TVSH / TVSH / me TVSH
+//   A19:J20  → blloku i kontratës (wrapText, lartësi 77pt)
+//   H12:K14  → emri i klientit
+//   H16:J16  → adresa e klientit
+const K = {
+  invoiceNumRow: 9, invoiceNumCol: 1,   // A9
+  invoiceDateCol: 10,                   // J9
+  issuerNameRow: 12, issuerNameCol: 1,  // A12
+  issuerNuiRow: 14, issuerNuiCol: 1,   // A14
+  issuerBankRow: 16, issuerBankCol: 1, // A16
+  contractBlockRow: 19,                 // A19:J20 (merged)
+  clientNameCell: 'H12',               // H12:K14 (merged)
+  clientAddressCell: 'H16',            // H16:J16 (merged)
+  perCell: 'H11',
+  titleCell: 'A30',    // A30:C36 — NJË qelizë e bashkuar
+  contractNumCell: 'D30',  // D30:E31 — NJË qelizë e bashkuar
+  refCell: 'F30',      // F30:G36 — NJË qelizë e bashkuar
+  totalRow: 31,        // H31 pa TVSH, I31 TVSH, J31 me TVSH
+};
+
+// ── Fletëdërgesë ──────────────────────────────────────────────────────────────
+// merged (nga inspektimi): A10:E10, A13:E13, A15:E15, A17:E17, A19:I19,
+//   A20:I21, A23:B24..A29:B29, C23:F24..C29:F29, G14:J14..G17:J17 etj.
+const P = {
+  placeCol: 10, placeRow: 9,           // J9
+  invoiceNumRow: 10, invoiceNumCol: 1, // A10 (merged A10:E10)
+  invoiceDateRow: 10, invoiceDateCol: 10, // J10
+  issuerNameRow: 13, issuerNameCol: 1, // A13
+  issuerNuiRow: 15, issuerNuiCol: 1,  // A15
+  issuerBankRow: 17, issuerBankCol: 1,// A17
+  contractRow: 20, contractCol: 1,    // A20 (merged A20:I21)
+  clientNameCell: 'G14',              // G14:J15 (merged)
+  clientAddressCell: 'G17',          // G17:J17 (merged)
+  perCell: 'G12',
+  firstDataRow: 25,                   // rreshti i parë (25, jo 23 — 23-24 janë header)
+  templateDataRows: 4,                // 23..29 = 7 rreshta
+  totalRow: 30,                       // totali (pas spliceRows nëse ka shtesë)
+};
 
 const PEACH_FILL: ExcelJS.Fill = {
-  type: 'pattern',
-  pattern: 'solid',
-  fgColor: { argb: 'FFFABF8F' },
+  type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFABF8F' },
 };
 
 function setCell(ws: ExcelJS.Worksheet, row: number, col: number, value: string | number | null): void {
   ws.getCell(row, col).value = value ?? '';
 }
 
-function splitLines(text: string, maxLines: number): string[] {
-  const lines = text.split(/\r?\n/).map((line) => line.trimEnd());
-  while (lines.length < maxLines) lines.push('');
-  return lines.slice(0, maxLines);
-}
-
 function parseNumber(value: string): number | null {
-  const normalized = value.trim().replace(/\s/g, '').replace(',', '.');
-  if (!normalized) return null;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+  const n = Number(value.trim().replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(n) && value.trim() !== '' ? n : null;
 }
 
 function applyA4PrintSetup(ws: ExcelJS.Worksheet): void {
   const lastRow = ws.dimensions?.bottom || ws.rowCount || 44;
-  const lastCol = ws.dimensions?.right || ws.columnCount || 10;
+  const lastCol = ws.dimensions?.right || ws.columnCount || 11;
   const lastColLetter = String.fromCharCode(64 + Math.min(lastCol, 26));
   ws.pageSetup = {
     ...ws.pageSetup,
@@ -52,275 +80,234 @@ function applyA4PrintSetup(ws: ExcelJS.Worksheet): void {
 }
 
 function safeUnmerge(ws: ExcelJS.Worksheet, range: string): void {
-  try {
-    ws.unMergeCells(range);
-  } catch {
-    // range nuk ishte i bashkuar
+  try { ws.unMergeCells(range); } catch { /* jo i bashkuar */ }
+}
+
+async function loadTemplate(kind: FaturaKind): Promise<ExcelJS.Workbook> {
+  const res = await fetch(TEMPLATE_URLS[kind]);
+  if (!res.ok) throw new Error(`Shablloni "${kind}" nuk u gjet (${res.status}).`);
+  const buf = await res.arrayBuffer();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  return wb;
+}
+
+// ── Kontratë: fill ────────────────────────────────────────────────────────────
+function fillKontrate(ws: ExcelJS.Worksheet, d: FaturaKontrateFields): void {
+  // Rreshti 9: numri + data
+  setCell(ws, K.invoiceNumRow, K.invoiceNumCol, `   FATURA Nr = ${d.invoiceNumber}`);
+  setCell(ws, K.invoiceNumRow, K.invoiceDateCol, `              Data: ${d.invoiceDate}      `);
+
+  // Lëshuesi
+  setCell(ws, K.issuerNameRow, K.issuerNameCol, d.issuer.companyName);
+  setCell(ws, K.issuerNuiRow,  K.issuerNuiCol,  `Nr.unik identifikues:${d.issuer.nui}`);
+  setCell(ws, K.issuerBankRow, K.issuerBankCol, `NLB BANKA:  ${d.issuer.bankAccount}`);
+
+  // Blloku i kontratës — A19:J20, wrapText, e tëra si tekst i vetëm
+  const contractBlock = [
+    d.contractBlockNumber ? `Numri i kontratës : ${d.contractBlockNumber}${d.contractBlockDate ? `  dt  ${d.contractBlockDate}` : ''}` : '',
+    d.contractBlockTitle ? `Titulli :  ${d.contractBlockTitle}` : '',
+    d.contractProtocolReference ? `Referenca e protokollit të kontratës: ${d.contractProtocolReference}` : '',
+    d.contractWorkSiteAddress ? `Adresa e vendit të kryerjes së punëve :  ${d.contractWorkSiteAddress}` : '',
+    d.invoiceDate ? `Datën e faturës : ${d.invoiceDate}` : '',
+  ].filter(Boolean).join('\n');
+  const contractCell = ws.getCell(K.contractBlockRow, 1);
+  contractCell.value = contractBlock;
+  contractCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  contractCell.font = { name: 'Arial', size: 12, bold: true };
+
+  // Tabela (rreshtat 27-28 janë header, s'preken)
+  // A30:C36 — NJË qelizë e bashkuar me wrapText — shkruan titulli i kontratës
+  const titleCell = ws.getCell(K.titleCell);
+  titleCell.value = d.tableTitle;
+  titleCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+  titleCell.font = { name: 'Cambria', size: 11 };
+
+  // D30:E31 — NJË qelizë e bashkuar — numri i kontratës
+  const contractNumCell = ws.getCell(K.contractNumCell);
+  contractNumCell.value = d.tableContractNumber;
+  contractNumCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  contractNumCell.font = { name: 'Cambria', size: 9 };
+
+  // F30:G36 — NJË qelizë e bashkuar me wrapText — referenca
+  const refCell = ws.getCell(K.refCell);
+  refCell.value = d.tableInvoiceReference;
+  refCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+  refCell.font = { name: 'Cambria', size: 10 };
+
+  // Totalet H31/I31/J31
+  const total = parseNumber(d.totalWithVat);
+  if (total !== null) {
+    setCell(ws, K.totalRow, 10, total);
+  } else {
+    setCell(ws, K.totalRow, 10, '');
   }
-}
+  ws.getCell(K.totalRow, 8).value = { formula: `J${K.totalRow}/1.18` };
+  ws.getCell(K.totalRow, 9).value = { formula: `J${K.totalRow}-H${K.totalRow}` };
 
-function applyBoxBorder(
-  ws: ExcelJS.Worksheet,
-  topRow: number,
-  bottomRow: number,
-  leftCol: number,
-  rightCol: number,
-  fill?: ExcelJS.Fill
-): void {
-  const medium: ExcelJS.BorderStyle = 'medium';
-  for (let row = topRow; row <= bottomRow; row += 1) {
-    for (let col = leftCol; col <= rightCol; col += 1) {
-      const cell = ws.getCell(row, col);
-      if (fill) cell.fill = fill;
-      cell.border = {
-        top: row === topRow ? { style: medium } : cell.border?.top,
-        bottom: row === bottomRow ? { style: medium } : cell.border?.bottom,
-        left: col === leftCol ? { style: medium } : cell.border?.left,
-        right: col === rightCol ? { style: medium } : cell.border?.right,
-      };
-    }
-  }
-}
-
-async function loadTemplateWorkbook(kind: FaturaKind): Promise<ExcelJS.Workbook> {
-  const response = await fetch(TEMPLATE_URLS[kind]);
-  if (!response.ok) throw new Error(`Nuk u gjet shablloni i faturës (${kind}).`);
-  const buffer = await response.arrayBuffer();
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
-  return workbook;
-}
-
-function buildKontrateContractBlock(data: FaturaKontrateFields): string {
-  const contractLine = [
-    'Numri i kontratës :',
-    data.contractBlockNumber,
-    data.contractBlockDate ? `dt  ${data.contractBlockDate}` : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
-
-  const lines = [
-    contractLine,
-    data.contractBlockTitle ? `Titulli :  ${data.contractBlockTitle}` : '',
-    data.contractProtocolReference
-      ? `Referenca e protokollit të kontratës: ${data.contractProtocolReference}`
-      : '',
-    data.contractWorkSiteAddress ? `Adresa e vendit te kryerjes së punëve :  ${data.contractWorkSiteAddress}` : '',
-    data.invoiceDate ? `Datën e faturës : ${data.invoiceDate}` : '',
-  ].filter(Boolean);
-
-  return lines.join('\n');
-}
-
-function applyKontrateLayoutStyles(ws: ExcelJS.Worksheet, data: FaturaKontrateFields): void {
-  applyBoxBorder(ws, 11, 16, 8, 10, PEACH_FILL);
-
-  safeUnmerge(ws, 'H12:J13');
-  ws.mergeCells('H12:J13');
-  const clientCell = ws.getCell('H12');
-  clientCell.value = [data.clientName, data.clientNameLine2].filter(Boolean).join('\n');
-  clientCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  clientCell.font = { name: 'Cambria', size: 20, bold: true };
+  // H12:K14 — klienti (safeUnmerge+mergeCells ruan master cell por mund t'i heqë bordet)
+  safeUnmerge(ws, 'H12:K14');
+  ws.mergeCells('H12:K14');
+  const clientCell = ws.getCell(K.clientNameCell);
+  clientCell.value = [d.clientName, d.clientNameLine2].filter(Boolean).join('\n');
+  clientCell.alignment = { horizontal: 'center', vertical: 'top', wrapText: true, shrinkToFit: false };
+  clientCell.font = { name: 'Cambria', size: 18, bold: true };
   clientCell.fill = PEACH_FILL;
+  // Restauro bordet medium nga shablloni (H11:T=medium, H12:L=medium, K12:R=medium, H16:B=medium...)
+  const medium: ExcelJS.BorderStyle = 'medium';
+  clientCell.border = { top: { style: medium }, left: { style: medium }, right: { style: medium } };
 
+  // H16:J16 — adresa
   safeUnmerge(ws, 'H16:J16');
   ws.mergeCells('H16:J16');
-  const addressCell = ws.getCell('H16');
-  addressCell.value = ` Adresa  : ${data.clientAddress}`;
+  const addressCell = ws.getCell(K.clientAddressCell);
+  addressCell.value = ` Adresa  : ${d.clientAddress}`;
   addressCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
   addressCell.font = { name: 'Cambria', size: 11, bold: true };
   addressCell.fill = PEACH_FILL;
+  addressCell.border = { bottom: { style: medium }, left: { style: medium }, right: { style: medium } };
 
-  const perLabel = ws.getCell('H11');
+  // "PËR" label
+  const perLabel = ws.getCell(K.perCell);
   perLabel.alignment = { horizontal: 'left', vertical: 'middle' };
   perLabel.font = { name: 'Cambria', size: 14, bold: true };
   perLabel.fill = PEACH_FILL;
 
-  const bankCell = ws.getCell('A16');
-  bankCell.font = { name: 'Cambria', size: 14, bold: true };
+  ws.getCell('A16').font = { name: 'Cambria', size: 14, bold: true };
 
-  const contractCell = ws.getCell('A19');
-  contractCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  contractCell.font = { name: 'Arial', size: 12, bold: true };
-}
-
-function fillKontrateWorksheet(ws: ExcelJS.Worksheet, data: FaturaKontrateFields): void {
-  setCell(ws, 9, 1, `   FATURA Nr = ${data.invoiceNumber}`);
-  setCell(ws, 9, 10, `              Data: ${data.invoiceDate}      `);
-
-  setCell(ws, 12, 1, data.issuer.companyName);
-  setCell(ws, 14, 1, `Nr.unik identifikues:${data.issuer.nui}`);
-  setCell(ws, 16, 1, `NLB BANKA:  ${data.issuer.bankAccount}`);
-
-  setCell(ws, 19, 1, buildKontrateContractBlock(data));
-
-  const titleLines = splitLines(data.tableTitle, KONTRATE_TITLE_ROWS.length);
-  KONTRATE_TITLE_ROWS.forEach((row, index) => setCell(ws, row, 1, titleLines[index]));
-
-  setCell(ws, 30, 4, data.tableContractNumber);
-
-  const referenceLines = splitLines(data.tableInvoiceReference, KONTRATE_REFERENCE_ROWS.length);
-  KONTRATE_REFERENCE_ROWS.forEach((row, index) => setCell(ws, row, 6, referenceLines[index]));
-
-  const total = parseNumber(data.totalWithVat);
-  if (total !== null) {
-    setCell(ws, 31, 10, total);
-  } else {
-    setCell(ws, 31, 10, '');
-  }
-  ws.getCell(31, 8).value = { formula: 'J31/1.18' };
-  ws.getCell(31, 9).value = { formula: 'J31-H31' };
-
-  applyKontrateLayoutStyles(ws, data);
   applyA4PrintSetup(ws);
 }
 
-function cloneRowStyle(ws: ExcelJS.Worksheet, sourceRow: number, targetRow: number, lastCol: number): void {
-  const source = ws.getRow(sourceRow);
-  const target = ws.getRow(targetRow);
+// ── Fletëdërgesë: fill ───────────────────────────────────────────────────────
+function cloneRowStyle(ws: ExcelJS.Worksheet, src: number, tgt: number, cols: number): void {
+  const source = ws.getRow(src);
+  const target = ws.getRow(tgt);
   target.height = source.height;
-  for (let col = 1; col <= lastCol; col += 1) {
-    const sourceCell = source.getCell(col);
-    const targetCell = target.getCell(col);
-    if (sourceCell.style) targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
-    if (sourceCell.numFmt) targetCell.numFmt = sourceCell.numFmt;
+  for (let c = 1; c <= cols; c++) {
+    const sc = source.getCell(c);
+    const tc = target.getCell(c);
+    if (sc.style) tc.style = JSON.parse(JSON.stringify(sc.style));
+    if (sc.numFmt) tc.numFmt = sc.numFmt;
   }
 }
 
-function mergePozicioneDataRow(ws: ExcelJS.Worksheet, row: number): void {
-  try {
-    ws.mergeCells(`A${row}:B${row}`);
-    ws.mergeCells(`C${row}:F${row}`);
-  } catch {
-    // range tashmë i bashkuar ose i pavlefshëm
-  }
-}
-
-function applyPozicioneLayoutStyles(ws: ExcelJS.Worksheet, data: FaturaPozicioneFields): void {
-  applyBoxBorder(ws, 12, 17, 7, 10, PEACH_FILL);
-
-  safeUnmerge(ws, 'G14:J15');
-  ws.mergeCells('G14:J15');
-  const clientCell = ws.getCell('G14');
-  clientCell.value = [data.clientName, data.clientNameLine2].filter(Boolean).join('\n');
-  clientCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-  clientCell.font = { name: 'Cambria', size: 18, bold: true };
-  clientCell.fill = PEACH_FILL;
-
-  safeUnmerge(ws, 'G17:J17');
-  ws.mergeCells('G17:J17');
-  const addressCell = ws.getCell('G17');
-  addressCell.value = `Adresa  :  ${data.clientAddress}`;
-  addressCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
-  addressCell.font = { name: 'Cambria', size: 11, bold: true };
-  addressCell.fill = PEACH_FILL;
-
-  const perLabel = ws.getCell('G12');
-  perLabel.font = { name: 'Cambria', size: 14, bold: true };
-  perLabel.fill = PEACH_FILL;
-
-  const bankCell = ws.getCell('A17');
-  bankCell.font = { name: 'Cambria', size: 14, bold: true };
-}
-
-function fillPozicioneWorksheet(ws: ExcelJS.Worksheet, data: FaturaPozicioneFields): void {
-  setCell(ws, 10, 1, `FATURA Nr = ${data.invoiceNumber}`);
-  setCell(ws, 9, 10, `${data.place},`);
-  setCell(ws, 10, 10, data.invoiceDate);
-
-  setCell(ws, 13, 1, data.issuer.companyName);
-  setCell(ws, 15, 1, `Nr.unik identifikues:${data.issuer.nui}`);
-  setCell(ws, 17, 1, `NLB BANKA:  ${data.issuer.bankAccount}`);
-
-  const contractLine = [data.contractTitle, data.contractNumber ? `Numri i kontratës: ${data.contractNumber}` : '']
-    .filter(Boolean)
-    .join('   ');
-  setCell(ws, 20, 1, contractLine ? ` ${contractLine}` : '');
-
-  const positions = data.positions.filter((row) =>
-    row.description.trim() || row.unit.trim() || row.quantity.trim() || row.unitPrice.trim()
-  );
-  const rowsNeeded = Math.max(positions.length, 1);
-  const extraRows = Math.max(0, rowsNeeded - POZICIONE_TEMPLATE_ROWS);
-
-  if (extraRows > 0) {
-    ws.spliceRows(POZICIONE_TOTAL_ROW_BASE, 0, ...Array.from({ length: extraRows }, () => []));
-    for (let i = 0; i < extraRows; i += 1) {
-      const targetRow = POZICIONE_FIRST_ROW + POZICIONE_TEMPLATE_ROWS + i;
-      cloneRowStyle(ws, POZICIONE_FIRST_ROW, targetRow, 10);
-      mergePozicioneDataRow(ws, targetRow);
-    }
-  }
-
-  const totalRow = POZICIONE_TOTAL_ROW_BASE + extraRows;
-  const lastDataRow = POZICIONE_FIRST_ROW + Math.max(positions.length, POZICIONE_TEMPLATE_ROWS) - 1;
-
-  for (let index = POZICIONE_FIRST_ROW; index <= lastDataRow; index += 1) {
-    setCell(ws, index, 1, '');
-    setCell(ws, index, 3, '');
-    setCell(ws, index, 7, '');
-    setCell(ws, index, 8, '');
-    setCell(ws, index, 9, '');
-    setCell(ws, index, 10, '');
-  }
-
-  positions.forEach((position, index) => {
-    fillPozicioneRow(ws, POZICIONE_FIRST_ROW + index, index + 1, position);
-  });
-
-  ws.getCell(totalRow, 10).value = {
-    formula: `SUM(J${POZICIONE_FIRST_ROW}:J${Math.max(POZICIONE_FIRST_ROW + positions.length - 1, POZICIONE_FIRST_ROW)})`,
-  };
-
-  applyPozicioneLayoutStyles(ws, data);
-  applyA4PrintSetup(ws);
-}
-
-function fillPozicioneRow(ws: ExcelJS.Worksheet, row: number, articleNo: number, position: FaturaPositionRow): void {
-  setCell(ws, row, 1, articleNo);
-  setCell(ws, row, 3, position.description);
-  setCell(ws, row, 7, position.unit);
-
-  const quantity = parseNumber(position.quantity);
-  const unitPrice = parseNumber(position.unitPrice);
-  setCell(ws, row, 8, quantity ?? '');
-  setCell(ws, row, 9, unitPrice ?? '');
-
-  if (quantity !== null && unitPrice !== null) {
-    ws.getCell(row, 10).value = { formula: `(H${row}*I${row})` };
+function fillPozicioneRow(ws: ExcelJS.Worksheet, row: number, nr: number, pos: FaturaPositionRow): void {
+  setCell(ws, row, 1, nr);
+  setCell(ws, row, 3, pos.description);
+  setCell(ws, row, 7, pos.unit);
+  const qty = parseNumber(pos.quantity);
+  const price = parseNumber(pos.unitPrice);
+  setCell(ws, row, 8, qty ?? '');
+  setCell(ws, row, 9, price ?? '');
+  if (qty !== null && price !== null) {
+    ws.getCell(row, 10).value = { formula: `H${row}*I${row}` };
   } else {
     setCell(ws, row, 10, '');
   }
 }
 
+function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
+  setCell(ws, P.placeRow,       P.placeCol,        `${d.place},`);
+  setCell(ws, P.invoiceNumRow,  P.invoiceNumCol,   `FATURA Nr = ${d.invoiceNumber}`);
+  setCell(ws, P.invoiceDateRow, P.invoiceDateCol,  d.invoiceDate);
+  setCell(ws, P.issuerNameRow,  P.issuerNameCol,   d.issuer.companyName);
+  setCell(ws, P.issuerNuiRow,   P.issuerNuiCol,    `Nr.unik identifikues:${d.issuer.nui}`);
+  setCell(ws, P.issuerBankRow,  P.issuerBankCol,   `NLB BANKA:  ${d.issuer.bankAccount}`);
+
+  const contractLine = [
+    d.contractTitle,
+    d.contractNumber ? `Numri i kontratës: ${d.contractNumber}` : '',
+  ].filter(Boolean).join('   ');
+  setCell(ws, P.contractRow, P.contractCol, contractLine ? ` ${contractLine}` : '');
+  const contractCell = ws.getCell(P.contractRow, P.contractCol);
+  contractCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+
+  const positions = d.positions.filter(p =>
+    p.description.trim() || p.unit.trim() || p.quantity.trim() || p.unitPrice.trim()
+  );
+  const extra = Math.max(0, positions.length - P.templateDataRows);
+
+  if (extra > 0) {
+    ws.spliceRows(P.totalRow, 0, ...Array.from({ length: extra }, () => []));
+    for (let i = 0; i < extra; i++) {
+      const tgt = P.firstDataRow + P.templateDataRows + i;
+      cloneRowStyle(ws, P.firstDataRow, tgt, 10);
+      try { ws.mergeCells(`A${tgt}:B${tgt}`); } catch {}
+      try { ws.mergeCells(`C${tgt}:F${tgt}`); } catch {}
+    }
+  }
+
+  const totalRow = P.totalRow + extra;
+  const lastData = P.firstDataRow + Math.max(positions.length, P.templateDataRows) - 1;
+
+  // Pastro rreshtat e të dhënave
+  for (let r = P.firstDataRow; r <= lastData; r++) {
+    for (const c of [1, 3, 7, 8, 9, 10]) setCell(ws, r, c, '');
+  }
+
+  positions.forEach((pos, i) => fillPozicioneRow(ws, P.firstDataRow + i, i + 1, pos));
+
+  ws.getCell(totalRow, 10).value = {
+    formula: `SUM(J${P.firstDataRow}:J${Math.max(P.firstDataRow + positions.length - 1, P.firstDataRow)})`,
+  };
+
+  // Klienti G14:J15 — restauro bordet medium pas merge
+  safeUnmerge(ws, 'G14:J15');
+  ws.mergeCells('G14:J15');
+  const clientCell = ws.getCell(P.clientNameCell);
+  clientCell.value = [d.clientName, d.clientNameLine2].filter(Boolean).join('\n');
+  clientCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  clientCell.font = { name: 'Cambria', size: 18, bold: true };
+  clientCell.fill = PEACH_FILL;
+  const mediumP: ExcelJS.BorderStyle = 'medium';
+  clientCell.border = { top: { style: mediumP }, left: { style: mediumP }, right: { style: mediumP } };
+
+  // Adresa G17:J17 — restauro bordet medium
+  safeUnmerge(ws, 'G17:J17');
+  ws.mergeCells('G17:J17');
+  const addressCell = ws.getCell(P.clientAddressCell);
+  addressCell.value = `Adresa  :  ${d.clientAddress}`;
+  addressCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  addressCell.font = { name: 'Cambria', size: 11, bold: true };
+  addressCell.fill = PEACH_FILL;
+  addressCell.border = { bottom: { style: mediumP }, left: { style: mediumP }, right: { style: mediumP } };
+
+  const perLabel = ws.getCell(P.perCell);
+  perLabel.font = { name: 'Cambria', size: 14, bold: true };
+  perLabel.fill = PEACH_FILL;
+
+  ws.getCell('A17').font = { name: 'Cambria', size: 14, bold: true };
+
+  applyA4PrintSetup(ws);
+}
+
+// ── Exports ──────────────────────────────────────────────────────────────────
 export async function buildKontrateWorkbook(data: FaturaKontrateFields): Promise<ArrayBuffer> {
-  const workbook = await loadTemplateWorkbook('kontrate');
-  const sheet = workbook.worksheets[0];
-  if (!sheet) throw new Error('Shablloni i kontratës nuk ka asnjë fletë.');
-  fillKontrateWorksheet(sheet, data);
-  return workbook.xlsx.writeBuffer() as Promise<ArrayBuffer>;
+  const wb = await loadTemplate('kontrate');
+  const ws = wb.worksheets[0];
+  if (!ws) throw new Error('Shablloni i kontratës nuk ka asnjë fletë.');
+  fillKontrate(ws, data);
+  return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
 
 export async function buildPozicioneWorkbook(data: FaturaPozicioneFields): Promise<ArrayBuffer> {
-  const workbook = await loadTemplateWorkbook('pozicione');
-  const sheet = workbook.worksheets[0];
-  if (!sheet) throw new Error('Shablloni i pozicioneve nuk ka asnjë fletë.');
-  fillPozicioneWorksheet(sheet, data);
-  return workbook.xlsx.writeBuffer() as Promise<ArrayBuffer>;
+  const wb = await loadTemplate('pozicione');
+  const ws = wb.worksheets[0];
+  if (!ws) throw new Error('Shablloni i pozicioneve nuk ka asnjë fletë.');
+  fillPozicione(ws, data);
+  return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }
 
 export function downloadKontrateInvoice(data: FaturaKontrateFields): Promise<void> {
-  return buildKontrateWorkbook(data).then((buffer) => {
-    const safeNumber = data.invoiceNumber.replace(/[^\w.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'fature';
-    downloadWorkbookBuffer(buffer, `Fatura-Kontrate-${safeNumber}.xlsx`);
+  return buildKontrateWorkbook(data).then((buf) => {
+    const safe = data.invoiceNumber.replace(/[^\w.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'fature';
+    downloadWorkbookBuffer(buf, `Fatura-Kontrate-${safe}.xlsx`);
   });
 }
 
 export function downloadPozicioneInvoice(data: FaturaPozicioneFields): Promise<void> {
-  return buildPozicioneWorkbook(data).then((buffer) => {
-    const safeNumber = data.invoiceNumber.replace(/[^\w.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'flete-dergese';
-    downloadWorkbookBuffer(buffer, `Flete-Dergese-${safeNumber}.xlsx`);
+  return buildPozicioneWorkbook(data).then((buf) => {
+    const safe = data.invoiceNumber.replace(/[^\w.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'flete-dergese';
+    downloadWorkbookBuffer(buf, `Flete-Dergese-${safe}.xlsx`);
   });
 }
