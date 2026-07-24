@@ -43,12 +43,12 @@ const P = {
   issuerNuiRow: 15, issuerNuiCol: 1,  // A15
   issuerBankRow: 17, issuerBankCol: 1,// A17
   contractRow: 20, contractCol: 1,    // A20 (merged A20:I21)
-  clientNameCell: 'G14',              // G14:J15 (merged)
+  clientNameCell: 'G13',              // G13:J15 (merged) — master cell është G13, jo G14!
   clientAddressCell: 'G17',          // G17:J17 (merged)
   perCell: 'G12',
   firstDataRow: 25,                   // rreshti i parë (25, jo 23 — 23-24 janë header)
   templateDataRows: 4,                // 23..29 = 7 rreshta
-  totalRow: 30,                       // totali (pas spliceRows nëse ka shtesë)
+  totalRow: 29,                       // totali (pas spliceRows nëse ka shtesë)
 };
 
 const PEACH_FILL: ExcelJS.Fill = {
@@ -210,6 +210,7 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
   setCell(ws, P.placeRow,       P.placeCol,        `${d.place},`);
   setCell(ws, P.invoiceNumRow,  P.invoiceNumCol,   `FATURA Nr = ${d.invoiceNumber}`);
   setCell(ws, P.invoiceDateRow, P.invoiceDateCol,  d.invoiceDate);
+  // Pastro vlerat statike të vjetra nga shablloni (A13, A15, A17, G17 kanë të dhëna hardcoded)
   setCell(ws, P.issuerNameRow,  P.issuerNameCol,   d.issuer.companyName);
   setCell(ws, P.issuerNuiRow,   P.issuerNuiCol,    `Nr.unik identifikues:${d.issuer.nui}`);
   setCell(ws, P.issuerBankRow,  P.issuerBankCol,   `NLB BANKA:  ${d.issuer.bankAccount}`);
@@ -251,9 +252,9 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
     formula: `SUM(J${P.firstDataRow}:J${Math.max(P.firstDataRow + positions.length - 1, P.firstDataRow)})`,
   };
 
-  // Klienti G14:J15 — restauro bordet medium pas merge
-  safeUnmerge(ws, 'G14:J15');
-  ws.mergeCells('G14:J15');
+  // Klienti G13:J15 — restauro bordet medium pas merge
+  safeUnmerge(ws, 'G13:J15');
+  ws.mergeCells('G13:J15');
   const clientCell = ws.getCell(P.clientNameCell);
   clientCell.value = [d.clientName, d.clientNameLine2].filter(Boolean).join('\n');
   clientCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
@@ -262,7 +263,7 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
   const mediumP: ExcelJS.BorderStyle = 'medium';
   clientCell.border = { top: { style: mediumP }, left: { style: mediumP }, right: { style: mediumP } };
 
-  // Adresa G17:J17 — restauro bordet medium
+  // Adresa G17:J17 — master=G17, restauro bordet medium
   safeUnmerge(ws, 'G17:J17');
   ws.mergeCells('G17:J17');
   const addressCell = ws.getCell(P.clientAddressCell);
@@ -271,6 +272,8 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
   addressCell.font = { name: 'Cambria', size: 11, bold: true };
   addressCell.fill = PEACH_FILL;
   addressCell.border = { bottom: { style: mediumP }, left: { style: mediumP }, right: { style: mediumP } };
+  // G16 mund të ketë mbetje — pastro
+  ws.getCell('G16').value = '';
 
   const perLabel = ws.getCell(P.perCell);
   perLabel.font = { name: 'Cambria', size: 14, bold: true };
