@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ParsedRow } from '../lib/excel';
-import { planLibriExport, buildLibriExportPositions, buildLibriSinglePageWorkbook, downloadWorkbookBuffer, extractSectionAccountNumber } from '../lib/libriExport';
+import { planLibriExport, buildLibriExportPositions, buildLibriSinglePageWorkbook, downloadWorkbookBuffer, extractSectionAccountNumber, type LibriExportPlanPage } from '../lib/libriExport';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 
 export type { ParamasaPreviewMeta };
@@ -13,6 +13,8 @@ type Props = {
   /** Nëse jepet, "Shiko faqen" bëhet i redaktueshëm — thirret me rreshtin origjinal (referencë)
    * dhe fushat e ndryshuara, dhe prindi (ImportPage) i përditëson te state-i i vet i `rows`. */
   onUpdateRow?: (row: ParsedRow, changes: Partial<ParsedRow>) => void;
+  /** Plan i fiksuar (p.sh. ndërtuesi manual) — anashkalon paketimin automatik planLibriExport. */
+  planOverride?: LibriExportPlanPage[];
 };
 
 /**
@@ -20,8 +22,8 @@ type Props = {
  * i .xlsx-it (libriExport.ts) — çka shikon këtu është çka merr në skedar, gjithmonë, sepse
  * është e njëjta logjikë, jo një përafrim i veçantë për UI.
  */
-export function ParamasaPreview({ rows, meta, sectionTitleOverrides, onUpdateRow }: Props) {
-  const plan = planLibriExport(rows, sectionTitleOverrides);
+export function ParamasaPreview({ rows, meta, sectionTitleOverrides, onUpdateRow, planOverride }: Props) {
+  const plan = planOverride ?? planLibriExport(rows, sectionTitleOverrides);
   const total = rows.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
   const overflowCount = plan.filter((page) => page.overflowWarning).length;
   const [downloadingPage, setDownloadingPage] = useState<number | null>(null);
@@ -186,7 +188,7 @@ export function ParamasaPreview({ rows, meta, sectionTitleOverrides, onUpdateRow
                             </label>
                             <div className="libri-fac-total-row">
                               <span>Gjithsejt :</span>
-                              <strong>{Number(sourceRow.total_price || 0).toFixed(2)}</strong>
+                              <strong>{Number(sourceRow.quantity || 0).toFixed(2)}</strong>
                             </div>
                           </>
                         ) : (

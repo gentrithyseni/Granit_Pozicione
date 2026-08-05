@@ -162,12 +162,14 @@ export function buildLibriExportPositions(rows: ParsedRow[]): LibriExportPositio
     const qty = Number(row.quantity || 0);
     const unitPrice = Number(row.unit_price || 0);
     const lineTotal = Number(row.total_price || 0) || qty * unitPrice;
+    // Kolonat F (Mujore-Monthly) dhe H (Gjithsejtë) në shabllonin real mbajnë SASINË,
+    // jo shumën monetare — e njëjta semantikë si matjet "A x B = C" te Libri Ndërtimor.
     return {
       positionNumber: row.position_number,
       description: row.description,
       unit: row.unit,
-      lines: [{ label: `${qty.toFixed(2)} x ${unitPrice.toFixed(2)}  = ${lineTotal.toFixed(2)}`, value: lineTotal }],
-      total: lineTotal,
+      lines: [{ label: `${qty.toFixed(2)} x ${unitPrice.toFixed(2)}  = ${lineTotal.toFixed(2)}`, value: qty }],
+      total: qty,
     };
   });
 }

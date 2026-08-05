@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { ParamasaPreview, type ParamasaPreviewMeta } from '../components/ParamasaPreview';
+import { ManualPageBuilder } from '../components/ManualPageBuilder';
 import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
 import { parseExcelWithValidation, type ParsedRow } from '../lib/excel';
@@ -69,6 +70,7 @@ export function ImportPage() {
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
   const [previewMode, setPreviewMode] = useState<'table' | 'preview'>('preview');
+  const [mainTab, setMainTab] = useState<'excel' | 'manual'>('excel');
   const [libriExportLoading, setLibriExportLoading] = useState(false);
   const [zipExportLoading, setZipExportLoading] = useState(false);
   const [previewMeta, setPreviewMeta] = useState<ParamasaPreviewMeta>({
@@ -232,12 +234,33 @@ export function ImportPage() {
   return (
     <Shell>
       <div className="page-header">
-        <h1>Ngarko Excel</h1>
-        <p className="muted">Ngarko Excel-in, lejo sugjerimin automatik të metadata-s, dhe kalo nga preview në final për pamjen e plotë.</p>
+        <h1>Libri Ndërtimor</h1>
+        <p className="muted">Ngarko Excel-in, ose krijo faqet manualish duke zgjedhur shabllonin dhe duke plotësuar të dhënat.</p>
       </div>
 
-      <div className="panel import-panel">
-        <div className="import-meta-panel">
+      <div className="import-main-tabs">
+        <button
+          type="button"
+          className={`import-main-tab ${mainTab === 'excel' ? 'active' : ''}`}
+          onClick={() => setMainTab('excel')}
+        >
+          Ngarko Excel
+        </button>
+        <button
+          type="button"
+          className={`import-main-tab ${mainTab === 'manual' ? 'active' : ''}`}
+          onClick={() => setMainTab('manual')}
+        >
+          Krijo Faqe
+        </button>
+      </div>
+
+      {mainTab === 'manual' && <ManualPageBuilder />}
+
+      {mainTab === 'excel' && (
+        <div className="excel-tab-content">
+          <div className="panel import-panel">
+            <div className="import-meta-panel">
           <div className="import-meta-panel-head">
             <strong>Metadata e paramasës</strong>
             <span className="muted">Sugjerohen automatikisht nga sistemi, pastaj mund t'i ndryshosh manualisht.</span>
@@ -458,6 +481,9 @@ export function ImportPage() {
           </section>
         )}
       </div>
+        </div>
+      )}
+
     </Shell>
   );
 }
