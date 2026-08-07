@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="sq">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Temë Diplome - Graniti Web</title>
+  <style>
+    :root {
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #0f4c81;
+      --line: #dbe3ea;
+      --bg: #f7f9fc;
+      --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+      line-height: 1.55;
+    }
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 28px 56px;
+    }
+    .cover {
+      min-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 40px 20px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+      margin-bottom: 28px;
+    }
+    .kicker {
+      text-transform: uppercase;
+      letter-spacing: .18em;
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    h1 {
+      margin: 14px 0 10px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.12;
+    }
+    .subtitle {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 16px;
+      margin: 10px auto 28px;
+    }
+    .meta-grid {
+      width: 100%;
+      max-width: 720px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      text-align: left;
+      margin-top: 8px;
+    }
+    .meta-item {
+      border: 1px solid var(--line);
+      background: #fbfdff;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .meta-label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .meta-value { font-weight: 700; }
+    .section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 18px;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
+    }
+    h2 {
+      margin: 0 0 14px;
+      color: var(--accent);
+      font-size: 24px;
+    }
+    h3 {
+      margin: 18px 0 10px;
+      font-size: 18px;
+      color: #17324d;
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 10px 0 14px 22px; }
+    li { margin: 6px 0; }
+    .toc {
+      columns: 2;
+      column-gap: 28px;
+    }
+    .toc a { color: var(--accent); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    .note {
+      border-left: 4px solid var(--accent);
+      background: #f3f8fd;
+      padding: 14px 16px;
+      border-radius: 10px;
+      color: #1e3b57;
+    }
+    .figure {
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #f9fbfe 100%);
+      border-radius: 14px;
+      padding: 18px;
+      margin: 16px 0 10px;
+    }
+    .figure-title {
+      font-weight: 700;
+      color: #17324d;
+      margin-bottom: 10px;
+    }
+    .figure-caption {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .screenshot-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .shot-card {
+      border: 1px dashed #b7c7d6;
+      background: #fbfdff;
+      border-radius: 14px;
+      overflow: hidden;
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+    }
+    .shot-preview {
+      min-height: 150px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #eef5fb 0%, #ffffff 100%);
+      color: #6b7280;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      padding: 18px;
+      text-align: center;
+    }
+    .shot-meta {
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--line);
+    }
+    .shot-title {
+      display: block;
+      font-weight: 800;
+      color: #17324d;
+      margin-bottom: 4px;
+    }
+    .shot-desc {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .stat-card {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px 10px;
+      text-align: center;
+    }
+    .stat-num {
+      display: block;
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+    .stat-label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .bar-chart {
+      display: grid;
+      grid-template-columns: 140px 1fr 48px;
+      gap: 10px 14px;
+      align-items: center;
+      margin-top: 14px;
+    }
+    .bar-label {
+      font-weight: 700;
+      color: #17324d;
+    }
+    .bar-track {
+      height: 14px;
+      background: #e7eef5;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #0f4c81 0%, #2d7cc0 100%);
+    }
+    .bar-value {
+      text-align: right;
+      font-weight: 700;
+      color: #17324d;
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+      align-items: stretch;
+    }
+    .flow-item {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 14px 12px;
+      min-height: 92px;
+      text-align: center;
+    }
+    .flow-item::after {
+      content: '→';
+      position: absolute;
+      right: -13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--accent);
+      font-size: 20px;
+      font-weight: 800;
+    }
+    .flow-item:last-child::after { content: ''; }
+    .flow-kicker {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 6px;
+    }
+    .flow-title {
+      display: block;
+      font-size: 15px;
+      font-weight: 800;
+      color: #17324d;
+    }
+    .flow-desc {
+      display: block;
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .footer {
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+      margin-top: 24px;
+      padding-bottom: 24px;
+    }
+    code {
+      background: #eef3f7;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: .95em;
+    }
+    @media print {
+      body { background: #fff; }
+      .page { max-width: none; padding: 0; }
+      .cover, .section { box-shadow: none; border-radius: 0; page-break-inside: avoid; }
+      .section { border-left: none; border-right: none; }
+      .cover { min-height: auto; page-break-after: always; }
+      .toc { columns: 1; }
+    }
+    @media (max-width: 720px) {
+      .meta-grid { grid-template-columns: 1fr; }
+      .toc { columns: 1; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .bar-chart { grid-template-columns: 1fr; }
+      .bar-value { text-align: left; }
+      .flow { grid-template-columns: 1fr; }
+      .flow-item::after { content: ''; }
+      .screenshot-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="cover">
+      <div class="kicker">Temë Diplome</div>
+      <h1>Zhvillimi i një platforme web për menaxhimin e paramasave, ofertave dhe Librit Ndërtimor në ndërtim</h1>
+      <p class="subtitle">
+        Dokument formal i përgatitur mbi bazën e repository-t ekzistues të projektit, duke përfshirë kodin burimor,
+        skemën e databazës, shërbimet, faqet, komponentët dhe materialet shembull të ruajtura në folderët
+        <code>Fatura</code> dhe <code>Paramasa</code>.
+      </p>
+      <div class="meta-grid">
+        <div class="meta-item"><span class="meta-label">Studenti</span><span class="meta-value">[Emri Mbiemri]</span></div>
+        <div class="meta-item"><span class="meta-label">Numri i indeksit</span><span class="meta-value">[Plotëso]</span></div>
+        <div class="meta-item"><span class="meta-label">Mentori</span><span class="meta-value">[Plotëso]</span></div>
+        <div class="meta-item"><span class="meta-label">Viti akademik</span><span class="meta-value">2025/2026</span></div>
+        <div class="meta-item"><span class="meta-label">Programi</span><span class="meta-value">Inxhinieri Softuerike / Shkenca Kompjuterike</span></div>
+        <div class="meta-item"><span class="meta-label">Institucioni</span><span class="meta-value">[Plotëso]</span></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Përmbajtja</h2>
+      <div class="toc">
+        <ol>
+          <li><a href="#hyrje">Hyrje</a></li>
+          <li><a href="#problemi">Problemi që zgjidhet</a></li>
+          <li><a href="#qellimi">Qëllimi dhe objektivat</a></li>
+          <li><a href="#metodologjia">Metodologjia</a></li>
+          <li><a href="#teknologjite">Teknologjitë</a></li>
+          <li><a href="#arkitektura">Arkitektura e sistemit</a></li>
+          <li><a href="#funksionalitetet">Funksionalitetet</a></li>
+          <li><a href="#teDhenat">Të dhënat dhe skema</a></li>
+          <li><a href="#faqet">Faqet e aplikacionit</a></li>
+          <li><a href="#funksione">Funksionet kryesore</a></li>
+          <li><a href="#testimi">Testimi dhe vlerësimi</a></li>
+          <li><a href="#screenshots">Screenshot / Figura</a></li>
+          <li><a href="#perparesite">Përparësitë dhe zhvillimi i mëtejshëm</a></li>
+          <li><a href="#referencat">Referencat</a></li>
+          <li><a href="#burimet">Burimet reale nga repository</a></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" id="hyrje">
+      <h2>1. Hyrje</h2>
+      <p>
+        Në sektorin e ndërtimit, proceset e llogaritjes së paramasave, ofertave dhe dokumentacionit shpesh mbështeten
+        në Excel, dokumente manuale dhe procedura të shpërndara. Kjo rrit gabimet, e ngadalëson punën dhe e vështirëson
+        ruajtjen e historikut.
+      </p>
+      <p>
+        Ky projekt adreson këtë problem duke ofruar një platformë web të centralizuar për menaxhim të të dhënave,
+        automatizim të llogaritjeve dhe gjenerim të dokumenteve të standardizuara.
+      </p>
+      <div class="note">
+        Dokumenti është i lidhur me implementimin real në repository, jo me një tekst të imagjinuar: përfshin vetëm
+        funksionet dhe modulet që ekzistojnë në kodin burimor dhe skemën e databazës.
+      </div>
+    </section>
+
+    <section class="section" id="problemi">
+      <h2>2. Problemi që zgjidhet</h2>
+      <ul>
+        <li>Ruajtje e shpërndarë e të dhënave në Excel dhe dokumente manuale.</li>
+        <li>Llogaritje të përsëritura dhe të ndjeshme ndaj gabimeve.</li>
+        <li>Mungesë e kërkimit të shpejtë në të dhëna historike.</li>
+        <li>Mungesë e historikut të çmimeve dhe analizës krahasuese.</li>
+        <li>Vështirësi në gjenerimin e Librit Ndërtimor dhe faturave në format të standardizuar.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="qellimi">
+      <h2>3. Qëllimi dhe objektivat</h2>
+      <p>Qëllimi i projektit është të ndërtohet një sistem web që:</p>
+      <ul>
+        <li>lehtëson futjen dhe menaxhimin e pozicioneve të punës,</li>
+        <li>importon dhe përpunon të dhëna nga Excel,</li>
+        <li>gjeneron faqe dhe dokumente për Libër Ndërtimor,</li>
+        <li>ofron analizë dhe statistikë të të dhënave,</li>
+        <li>ruan informacionin në mënyrë të sigurt në Supabase,</li>
+        <li>mbështet autentikim dhe kontroll aksesi.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="metodologjia">
+      <h2>4. Metodologjia</h2>
+      <p>Puna është zhvilluar në mënyrë praktike dhe iteruese:</p>
+      <ol>
+        <li>Analizë e problemit dhe identifikim i nevojave.</li>
+        <li>Projektim i strukturës së faqeve dhe të dhënave.</li>
+        <li>Ndërtim i komponentëve të ripërdorshëm dhe i logjikës së biznesit.</li>
+        <li>Integrim me Supabase për auth dhe databazë.</li>
+        <li>Implementim i importit Excel, eksportit dhe preview-t.</li>
+        <li>Testim me të dhëna reale dhe shabllone ekzistuese.</li>
+      </ol>
+    </section>
+
+    <section class="section" id="teknologjite">
+      <h2>5. Teknologjitë e përdorura</h2>
+      <ul>
+        <li><strong>React 18</strong> për UI me komponentë të ripërdorshëm.</li>
+        <li><strong>TypeScript</strong> për tipizim dhe siguri më të mirë të kodit.</li>
+        <li><strong>Vite</strong> për build dhe development server të shpejtë.</li>
+        <li><strong>React Router 6</strong> për navigim midis faqeve.</li>
+        <li><strong>Supabase</strong> për Auth, PostgreSQL dhe RLS.</li>
+        <li><strong>react-hook-form</strong> për forma.</li>
+        <li><strong>xlsx, exceljs, jszip</strong> për import/export Excel dhe ZIP.</li>
+        <li><strong>lucide-react</strong> për ikona.</li>
+        <li><strong>victory</strong> për grafikë dhe analizë vizuale.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="arkitektura">
+      <h2>6. Arkitektura e sistemit</h2>
+      <p>
+        Aplikacioni nis nga <code>App.tsx</code>, ku vendosen provider-at globalë: <code>ThemeProvider</code>,
+        <code>AuthProvider</code> dhe <code>ToastProvider</code>. Route-t kryesore mbrohen me <code>ProtectedRoute</code>.
+      </p>
+      <p>
+        Struktura ndahet në katër shtresa kryesore: prezantimi (faqet dhe komponentët), logjika e biznesit
+        (services dhe lib), gjendja globale (context) dhe shtresa e të dhënave (Supabase / PostgreSQL).
+      </p>
+      <div class="figure">
+        <div class="figure-title">Figura 1. Shpërndarja e moduleve në repository</div>
+        <svg viewBox="0 0 760 240" width="100%" height="240" role="img" aria-label="Grafik me module të repository-it">
+          <defs>
+            <linearGradient id="barGradient" x1="0" x2="1">
+              <stop offset="0%" stop-color="#0f4c81" />
+              <stop offset="100%" stop-color="#2d7cc0" />
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="760" height="240" rx="16" fill="#f8fbff" stroke="#dbe3ea" />
+          <line x1="70" y1="200" x2="710" y2="200" stroke="#cfd8e3" stroke-width="2" />
+          <line x1="70" y1="42" x2="70" y2="200" stroke="#cfd8e3" stroke-width="2" />
+
+          <rect x="100" y="62" width="88" height="138" rx="10" fill="url(#barGradient)" />
+          <rect x="240" y="36" width="88" height="164" rx="10" fill="url(#barGradient)" />
+          <rect x="380" y="48" width="88" height="152" rx="10" fill="url(#barGradient)" />
+          <rect x="520" y="50" width="88" height="150" rx="10" fill="url(#barGradient)" />
+          <rect x="660" y="66" width="48" height="134" rx="10" fill="url(#barGradient)" />
+
+          <text x="144" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Faqe</text>
+          <text x="284" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Komponentë</text>
+          <text x="424" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Services</text>
+          <text x="564" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Lib</text>
+          <text x="684" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">DB</text>
+
+          <text x="144" y="54" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">7</text>
+          <text x="284" y="28" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">13</text>
+          <text x="424" y="40" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">9</text>
+          <text x="564" y="42" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">9</text>
+          <text x="684" y="58" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">5</text>
+        </svg>
+        <div class="figure-caption">
+          Grafiku tregon numrin e moduleve kryesore të identifikuara në repository: 7 faqe, 13 komponentë, 9 shërbime,
+          9 skedarë në lib dhe 5 tabela kryesore në databazë.
+        </div>
+      </div>
+
+      <div class="stats-grid" aria-label="Statistika të projektit">
+        <div class="stat-card"><span class="stat-num">7</span><span class="stat-label">faqe kryesore</span></div>
+        <div class="stat-card"><span class="stat-num">13</span><span class="stat-label">komponentë të përbashkët</span></div>
+        <div class="stat-card"><span class="stat-num">9</span><span class="stat-label">shërbime biznesi</span></div>
+        <div class="stat-card"><span class="stat-num">9</span><span class="stat-label">modulë / utilitarë në lib</span></div>
+        <div class="stat-card"><span class="stat-num">5</span><span class="stat-label">tabela kryesore të databazës</span></div>
+      </div>
+    </section>
+
+    <section class="section" id="figure-rrjedha">
+      <h2>6.1 Figura e rrjedhës së të dhënave</h2>
+      <p>
+        Më poshtë paraqitet rrjedha bazë e sistemit: input-i vjen nga përdoruesi ose Excel-i, kalon në validim,
+        pastaj ruhet në Supabase dhe në fund shfaqet në dashboard / preview / eksport.
+      </p>
+      <div class="figure">
+        <div class="flow">
+          <div class="flow-item">
+            <span class="flow-kicker">Hapi 1</span>
+            <span class="flow-title">Përdoruesi</span>
+            <span class="flow-desc">Fut të dhëna manualisht ose ngarkon Excel.</span>
+          </div>
+          <div class="flow-item">
+            <span class="flow-kicker">Hapi 2</span>
+            <span class="flow-title">Validimi</span>
+            <span class="flow-desc">Kontrollohen fushat, çmimet dhe struktura.</span>
+          </div>
+          <div class="flow-item">
+            <span class="flow-kicker">Hapi 3</span>
+            <span class="flow-title">Supabase</span>
+            <span class="flow-desc">Ruajtja e të dhënave, auth dhe historiku.</span>
+          </div>
+          <div class="flow-item">
+            <span class="flow-kicker">Hapi 4</span>
+            <span class="flow-title">Output</span>
+            <span class="flow-desc">Dashboard, preview, export Excel/ZIP/JSON.</span>
+          </div>
+        </div>
+        <div class="figure-caption">
+          Figura 2. Rrjedha bazë e të dhënave dhe procesit në aplikacion.
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="funksionalitetet">
+      <h2>7. Funksionalitetet kryesore</h2>
+      <ul>
+        <li>Dashboard me statistika, projekte referencë dhe grafikë analitike.</li>
+        <li>Regjistrim manual i pozicioneve me kalkulim të detajuar të kostove.</li>
+        <li>Import Excel dhe preview para eksportit final.</li>
+        <li>Gjenerim i Librit Ndërtimor në Excel dhe ZIP.</li>
+        <li>Krijim i faturave në dy modele të ndryshme.</li>
+        <li>Kërkim global në pozicione, projekte dhe kategori.</li>
+        <li>Menaxhim i të dhënave, editim, fshirje dhe analizë krahasuese.</li>
+        <li>Autentikim, ndryshim password-i dhe backup JSON.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="teDhenat">
+      <h2>8. Të dhënat dhe skema</h2>
+      <p>Skema e databazës në <code>database-schema.sql</code> përfshin tabelat:</p>
+      <ul>
+        <li><code>categories</code></li>
+        <li><code>projects</code></li>
+        <li><code>project_items</code></li>
+        <li><code>item_expenses</code></li>
+        <li><code>import_history</code></li>
+      </ul>
+      <p>
+        Në logjikën e aplikacionit përdoren edhe funksione për historikun e çmimeve dhe eksportet e ruajtura.
+        Kjo e bën sistemin më të përshtatshëm për analizë dhe raportim.
+      </p>
+      <h3>Të dhënat kryesore</h3>
+      <ul>
+        <li><strong>Projektet</strong>: emri, klienti, statusi, përshkrimi, kosto reale, shënime.</li>
+        <li><strong>Kategoritë</strong>: emri dhe përshkrimi.</li>
+        <li><strong>Pozicionet</strong>: numër pozicioni, përshkrim, njësi, sasi, çmim dhe total.</li>
+        <li><strong>Shpenzimet e detajuara</strong>: material, punë, ushqim, transport dhe të tjera.</li>
+        <li><strong>Historiku i importeve</strong>: skedarët e importuar dhe undo.</li>
+        <li><strong>Eksportet</strong>: Libri Ndërtimor, CSV dhe JSON backup.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="faqet">
+      <h2>9. Faqet e aplikacionit</h2>
+      <h3>Faqja kryesore</h3>
+      <p>Shfaq statistika, statuset e projekteve dhe qasje të shpejta drejt moduleve kryesore.</p>
+      <h3>Faqja e regjistrimit</h3>
+      <p>Lejon futje manuale të pozicioneve dhe llogaritje të detajuara të kostove.</p>
+      <h3>Faqja e faturës</h3>
+      <p>Gjeneron fatura sipas modeleve të kontratës ose pozicioneve.</p>
+      <h3>Faqja e importit</h3>
+      <p>Lexon Excel, bën preview dhe eksport final të Librit Ndërtimor.</p>
+      <h3>Faqja e të dhënave</h3>
+      <p>Lejon editim, fshirje, krahasim dhe analizë të të dhënave.</p>
+      <h3>Faqja e kërkimit</h3>
+      <p>Ofron kërkim global në përshkrime, numra pozicionesh dhe projekte.</p>
+      <h3>Faqja e profilit</h3>
+      <p>Menaxhon llogarinë, ndryshimin e password-it dhe backup-in JSON.</p>
+    </section>
+
+    <section class="section" id="funksione">
+      <h2>10. Funksionet kryesore teknike</h2>
+      <ul>
+        <li><code>calculatePositionPrice</code> për llogaritje çmimi.</li>
+        <li><code>validateKontrate</code> dhe <code>validatePozicione</code> për faturat.</li>
+        <li><code>parseExcelWithValidation</code> për lexim dhe validim të Excel-it.</li>
+        <li><code>planLibriExport</code> dhe <code>buildLibriNdertimorWorkbook</code> për eksportin final.</li>
+        <li><code>exportProjectCSV</code> dhe <code>exportAllDataJson</code> për eksportet shtesë.</li>
+        <li><code>fetchDashboardStats</code>, <code>fetchProjectSummaries</code> dhe <code>fetchPriceTrend</code> për analiza.</li>
+        <li><code>signIn</code>, <code>signUp</code>, <code>resetPassword</code> dhe <code>changePassword</code> për auth.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="testimi">
+      <h2>11. Testimi dhe vlerësimi</h2>
+      <p>
+        Testimi duhet të fokusohet në saktësinë e llogaritjeve, importin korrekt të Excel-it, gjenerimin e saktë të
+        Librit Ndërtimor, kërkimin global, editimin e të dhënave dhe funksionimin e autentikimit.
+      </p>
+      <p>
+        Për këtë projekt është e rëndësishme të testohen edhe shembujt realë të ruajtur në folderët
+        <code>Fatura</code> dhe <code>Paramasa</code>, sepse ato përfaqësojnë mënyrën reale të përdorimit.
+      </p>
+    </section>
+
+    <section class="section" id="screenshots">
+      <h2>12. Screenshot / Figura</h2>
+      <p>
+        Kjo pjesë është e menduar për figurat reale të aplikacionit. Më poshtë janë placeholder-at që mund t’i
+        zëvendësosh me screenshot-e nga versioni final i projektit.
+      </p>
+      <div class="screenshot-grid">
+        <div class="shot-card">
+          <div class="shot-preview">Shto screenshot të dashboard-it</div>
+          <div class="shot-meta">
+            <span class="shot-title">Figura 3. Ballina / Dashboard</span>
+            <span class="shot-desc">Statistika, grafikë dhe projektet referencë.</span>
+          </div>
+        </div>
+        <div class="shot-card">
+          <div class="shot-preview">Shto screenshot të regjistrimit</div>
+          <div class="shot-meta">
+            <span class="shot-title">Figura 4. Regjistrimi i pozicioneve</span>
+            <span class="shot-desc">Forma me llogaritje të kostove dhe preview të çmimit.</span>
+          </div>
+        </div>
+        <div class="shot-card">
+          <div class="shot-preview">Shto screenshot të importit / preview</div>
+          <div class="shot-meta">
+            <span class="shot-title">Figura 5. Import Excel dhe preview</span>
+            <span class="shot-desc">Leximi i skedarit, validimi dhe gjenerimi i Librit Ndërtimor.</span>
+          </div>
+        </div>
+        <div class="shot-card">
+          <div class="shot-preview">Shto screenshot të të dhënave</div>
+          <div class="shot-meta">
+            <span class="shot-title">Figura 6. Faqja e të dhënave</span>
+            <span class="shot-desc">Editimi, krahasimi, historiku i çmimeve dhe analizat.</span>
+          </div>
+        </div>
+      </div>
+      <div class="figure-caption">
+        Për dorëzim final, zëvendëso placeholder-at me screenshot-e reale të marra nga aplikacioni.
+      </div>
+    </section>
+
+    <section class="section" id="perparesite">
+      <h2>13. Përparësitë dhe zhvillimi i mëtejshëm</h2>
+      <ul>
+        <li>Centralizon të gjitha të dhënat në një sistem të vetëm.</li>
+        <li>Automatizon llogaritjet dhe eksportet.</li>
+        <li>Ofron kërkim, analizë dhe histori të të dhënave.</li>
+        <li>Ka arkitekturë të ndarë dhe të lexueshme.</li>
+        <li>Është i përshtatshëm për përdorim real në ndërtim.</li>
+      </ul>
+      <p>Si zhvillim i mëtejshëm mund të shtohen: PDF më i avancuar, role përdoruesish, raporte grafike shtesë dhe integrim me module financiare.</p>
+    </section>
+
+    <section class="section" id="referencat">
+      <h2>14. Referencat</h2>
+      <ol>
+        <li>React Documentation – https://react.dev</li>
+        <li>TypeScript Documentation – https://www.typescriptlang.org/docs/</li>
+        <li>Vite Documentation – https://vite.dev</li>
+        <li>React Router Documentation – https://reactrouter.com</li>
+        <li>Supabase Documentation – https://supabase.com/docs</li>
+        <li>react-hook-form Documentation – https://react-hook-form.com</li>
+        <li>ExcelJS Documentation – https://github.com/exceljs/exceljs</li>
+        <li>SheetJS / xlsx Documentation – https://docs.sheetjs.com</li>
+        <li>Victory Documentation – https://commerce.nearform.com/open-source/victory/</li>
+      </ol>
+    </section>
+
+    <section class="section" id="burimet">
+      <h2>15. Burimet reale nga repository</h2>
+      <ul>
+        <li><code>App.tsx</code> për route-t dhe provider-at globalë.</li>
+        <li><code>README.md</code> për përshkrimin bazë të projektit.</li>
+        <li><code>database-schema.sql</code> për strukturën e databazës dhe RLS.</li>
+        <li><code>src/pages</code> për të gjitha faqet kryesore.</li>
+        <li><code>src/services</code> për logjikën e biznesit, eksportet dhe analizat.</li>
+        <li><code>src/lib</code> për validim, kalkulim dhe eksport dokumentesh.</li>
+        <li><code>Fatura</code> dhe <code>Paramasa</code> për materialet shembull dhe shabllonet praktike.</li>
+      </ul>
+      <div class="note">
+        Në versionin final, kjo temë duket më e fortë kur tregon qartë që është ndërtuar mbi funksionet dhe të dhënat
+        reale të repository-t, jo vetëm si përshkrim teorik.
+      </div>
+    </section>
+
+    <div class="footer">
+      Dokument i përgatitur për temë diplome. Për versionin final shto faqen e titullit, logon e institucionit,
+      përmbajtjen automatike dhe screenshot-e nga aplikacioni.
+    </div>
+  </div>
+</body>
+</html>
