@@ -27,10 +27,13 @@ export type LibriSlotCoord = {
 };
 
 export const TEMPLATE_SLOTS: Record<TemplateId, LibriSlotCoord[]> = {
-  1: [{ descRow: 17, maxChars: 285, measureRow: 20, gjithsejtRow: 21, sectionAccountRow: 11, sectionPositionsRow: 11, sectionTitleRow: 11 }],
+  // Shablloni 1 u zgjerua në A17:E19 (sidomos rreshtat 18-19), prandaj mban
+  // përshkrime dukshëm më të gjata pa kaluar automatikisht në overflow.
+  1: [{ descRow: 17, maxChars: 1070, measureRow: 20, gjithsejtRow: 21, sectionAccountRow: 11, sectionPositionsRow: 11, sectionTitleRow: 11 }],
   2: [
-    { descRow: 17, maxChars: 447, measureRow: 20, gjithsejtRow: 21, sectionAccountRow: 11, sectionPositionsRow: 11, sectionTitleRow: 9 },
-    { descRow: 24, maxChars: 504, measureRow: 26, gjithsejtRow: 27, sectionAccountRow: 11, sectionPositionsRow: 11, sectionTitleRow: 9 },
+    // Të dy hapësirat e përshkrimit u rritën manualisht në shabllonin 2.
+    { descRow: 17, maxChars: 475, measureRow: 20, gjithsejtRow: 21, sectionAccountRow: 11, sectionPositionsRow: 11, sectionTitleRow: 9 },
+    { descRow: 24, maxChars: 675, measureRow: 26, gjithsejtRow: 27, sectionAccountRow: 11, sectionPositionsRow: 11, sectionTitleRow: 9 },
   ],
   3: [
     { descRow: 16, maxChars: 323, measureRow: 19, gjithsejtRow: 20, sectionAccountRow: 11, sectionPositionsRow: 11, sectionTitleRow: 11 },
@@ -90,9 +93,11 @@ export function packSectionIntoPages(rows: ParsedRow[]): LibriPage[] {
     let chosen: TemplateId = 1;
     let chosenOverflow = false;
     let chosenMixedUnits = false;
-    let found = false;
 
-    // preferenca: shablloni më i madh që HYN pa e tejkaluar kapacitetin e përshkrimit
+    // Preferohet shablloni më i madh që mbetet i sigurt. Nëse asnjë nuk hyn pa overflow,
+    // zbret në 1 pozicion/faqe — kjo e parandalon grupimin e 4-5 pozicioneve me përshkrime
+    // shumë të gjata, që kishte sjellë raste të pa logjikës në preview dhe në export.
+    let foundSafeCandidate = false;
     for (let candidate = Math.min(5, remaining.length) as TemplateId; candidate >= 1; candidate -= 1) {
       const slice = remaining.slice(0, candidate);
       const { fits, overflow, mixedUnits } = fitsTemplate(slice, candidate);
@@ -100,18 +105,15 @@ export function packSectionIntoPages(rows: ParsedRow[]): LibriPage[] {
         chosen = candidate;
         chosenOverflow = false;
         chosenMixedUnits = mixedUnits;
-        found = true;
+        foundSafeCandidate = true;
         break;
       }
     }
 
-    // asnjë madhësi s'del pa overflow — përdor shabllonin më të madh të mundshëm gjithsesi,
-    // por sinjalizo qartë për rikontroll manual, në vend që të mos gjenerohet asgjë.
-    if (!found) {
-      const candidate = Math.min(5, remaining.length) as TemplateId;
-      const slice = remaining.slice(0, candidate);
-      const { overflow, mixedUnits } = fitsTemplate(slice, candidate);
-      chosen = candidate;
+    if (!foundSafeCandidate) {
+      const singleRow = remaining[0];
+      const { overflow, mixedUnits } = fitsTemplate([singleRow], 1);
+      chosen = 1;
       chosenOverflow = overflow;
       chosenMixedUnits = mixedUnits;
     }

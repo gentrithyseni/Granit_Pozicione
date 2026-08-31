@@ -13,6 +13,14 @@ import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 import { groupRowsBySection } from './paramasaPreview';
 import { packSectionIntoPages, TEMPLATE_SLOTS, type TemplateId, type LibriPage } from './libriPaging';
 
+const TEMPLATE_FILES: Record<TemplateId, string> = {
+  1: 'Shablloni-1-Faqe.xlsx',
+  2: 'Shablloni-2-Faqe.xlsx',
+  3: 'Shablloni-3-Faqe.xlsx',
+  4: 'Shablloni-4-Faqe.xlsx',
+  5: 'Shablloni-5-Faqe.xlsx',
+};
+
 const TEMPLATE_URLS: Record<TemplateId, string> = {
   1: '/templates/Shablloni-1-Faqe.xlsx',
   2: '/templates/Shablloni-2-Faqe.xlsx',
@@ -20,6 +28,11 @@ const TEMPLATE_URLS: Record<TemplateId, string> = {
   4: '/templates/Shablloni-4-Faqe.xlsx',
   5: '/templates/Shablloni-5-Faqe.xlsx',
 };
+
+function toArrayBuffer(value: ArrayBuffer | Uint8Array | Buffer): ArrayBuffer {
+  const bytes = new Uint8Array(value);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
 
 // Koordinata fikse, njësoj në të gjitha 5 shabllonet (verifikuar direkt në skedarët reale).
 const FIXED_CELLS = {
@@ -66,34 +79,38 @@ function sanitizeSheetName(name: string): string {
 
 async function loadTemplateWorkbook(templateId: TemplateId): Promise<ExcelJS.Workbook> {
   const url = TEMPLATE_URLS[templateId];
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Nuk u gjet shablloni në ${url}`);
-  const buffer = await response.arrayBuffer();
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer);
-  return workbook;
+  const fileName = TEMPLATE_FILES[templateId];
+
+  if (typeof window !== 'undefined' || typeof document !== 'undefined') {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Nuk u gjet shablloni në ${url}`);
+    const buffer = await response.arrayBuffer();
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    return workbook;
+  }
+
+  try {
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const filePath = path.resolve(process.cwd(), 'public', 'templates', fileName);
+    const buffer = await fs.readFile(filePath);
+    const workbook = new ExcelJS.Workbook();
+    const arrayBuffer = buffer instanceof Uint8Array ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) : buffer;
+    await workbook.xlsx.load(arrayBuffer);
+    return workbook;
+  } catch (error) {
+    throw new Error(`Nuk u gjet shablloni në ${url} ose ${fileName}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /** Klonon një fletë burimore (me stile, bashkime qelizash, gjerësi/lartësi) brenda workbook-ut të destinacionit. */
 function cloneWorksheet(target: ExcelJS.Workbook, source: ExcelJS.Worksheet, name: string): ExcelJS.Worksheet {
-  const lastRow = source.dimensions?.bottom || source.rowCount;
-  const lastCol = source.dimensions?.right || source.columnCount || 8;
-  const lastColLetter = String.fromCharCode(64 + lastCol);
-
   const clone = target.addWorksheet(name, {
-    pageSetup: {
-      ...source.pageSetup,
-      // Shabllonet origjinale përdorin vetëm "scale: 92%" fiks, jo "fit to page". Kjo
-      // funksiononte për një skedar të vetëm, statik — por meqë tani përmbajtja (përshkrimi)
-      // ndryshon gjatësi sipas paramasës, duhet të detyrojmë "1 faqe e gjerë x 1 faqe e lartë",
-      // përndryshe rreshti i nënshkrimeve ("Kryesi i punëve / Organi mbikëqyrës") mund të
-      // shtyhet automatikisht në faqen e dytë kur printohet, në vend që të qëndrojë në fund
-      // të faqes A4 së parë.
-      fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 1,
-      printArea: `A1:${lastColLetter}${lastRow}`,
-    },
+    // Ruaj pageSetup origjinal (scale 92%, fitToPage false) — shabllonet realë printohen
+    // saktë në A4 me këto vlera. Detyrimi i fitToPage:true shkaktonte humbje vijash (borders)
+    // në Print Preview derisa Excel të rillogariste layout-in (p.sh. pas ndryshimit të lartësisë).
+    pageSetup: { ...source.pageSetup },
     properties: { ...source.properties },
     views: source.views?.map((v) => ({ ...v })),
   });
@@ -135,7 +152,10 @@ function cloneWorksheet(target: ExcelJS.Workbook, source: ExcelJS.Worksheet, nam
 }
 
 function setCell(ws: ExcelJS.Worksheet, row: number, col: number, value: string | number): void {
-  ws.getCell(row, col).value = value;
+  const cell = ws.getCell(row, col);
+  const style = cell.style ? JSON.parse(JSON.stringify(cell.style)) as ExcelJS.Style : undefined;
+  cell.value = value;
+  if (style) cell.style = style;
 }
 
 type LibriExportPosition = {
@@ -207,17 +227,13 @@ export function planLibriExport(rows: ParsedRow[], sectionTitleOverrides?: Recor
 }
 
 /**
- * Gjeneron një workbook Excel me faqe identike me shabllonet reale (Shablloni-1..5 Faqe.xlsx),
- * duke paketuar automatikisht 1-5 pozicione/faqe kur është e sigurt, dhe pa përzier kurrë
- * pozicione të seksioneve të ndryshme. Kthen ArrayBuffer gati për shkarkim.
+ * Gjeneron një workbook Excel nga një plan i gatshëm faqesh.
  */
-export async function buildLibriNdertimorWorkbook(
-  rows: ParsedRow[],
+export async function buildLibriNdertimorWorkbookFromPlan(
+  plan: LibriExportPlanPage[],
   meta: ParamasaPreviewMeta,
-  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook,
-  sectionTitleOverrides?: Record<string, string>
+  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook
 ): Promise<ArrayBuffer> {
-  const plan = planLibriExport(rows, sectionTitleOverrides);
   const output = new ExcelJS.Workbook();
   output.creator = 'Graniti Web';
   output.created = new Date();
@@ -252,7 +268,23 @@ export async function buildLibriNdertimorWorkbook(
   }
 
   const buffer = await output.xlsx.writeBuffer();
-  return buffer as ArrayBuffer;
+  return toArrayBuffer(buffer as ArrayBuffer | Uint8Array | Buffer);
+}
+
+/**
+ * Gjeneron një workbook Excel me faqe identike me shabllonet reale (Shablloni-1..5 Faqe.xlsx),
+ * duke paketuar automatikisht 1-5 pozicione/faqe kur është e sigurt, dhe pa përzier kurrë
+ * pozicione të seksioneve të ndryshme. Kthen ArrayBuffer gati për shkarkim.
+ */
+export async function buildLibriNdertimorWorkbook(
+  rows: ParsedRow[],
+  meta: ParamasaPreviewMeta,
+  templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook,
+  sectionTitleOverrides?: Record<string, string>,
+  planOverride?: LibriExportPlanPage[]
+): Promise<ArrayBuffer> {
+  const plan = planOverride ?? planLibriExport(rows, sectionTitleOverrides);
+  return buildLibriNdertimorWorkbookFromPlan(plan, meta, templateLoader);
 }
 
 /** Mbush një fletë tashmë të klonuar me të dhënat e një faqeje të vetme (ndarë nga logjika e sipërme, e ripërdorur edhe për shkarkimin e një faqeje të vetme). */
@@ -262,7 +294,6 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
 
   setCell(ws, FIXED_CELLS.month.row, FIXED_CELLS.month.col, `Muaji-Month ${meta.month || ''}`.trim());
   setCell(ws, FIXED_CELLS.executor.row, FIXED_CELLS.executor.col, `Kryerësi i punëve "${meta.executorName || ''}" `);
-  setCell(ws, FIXED_CELLS.object.row, FIXED_CELLS.object.col, `Objekti-Building : ${meta.objectName || ''}`);
 
   // Shabllonet origjinale (kopjuar nga një projekt real konkret) kanë tekst STATIK të ngulitur
   // në disa rreshta — vazhdimi i "Objekti-Building" (F4-F6, p.sh. "- Renovimi i zyrave... në
@@ -272,6 +303,11 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
   // të dukshme në çdo faqe të re (raportuar nga përdoruesi: "po del paramasa e vjetër").
   [4, 5, 6].forEach((row) => setCell(ws, row, 6, ''));
   [9, 10].forEach((row) => setCell(ws, row, 1, ''));
+
+  // F3:H6 është qelizë e bashkuar; objekti duhet të shkruhet PAS pastrimit të F4:F6,
+  // përndryshe pastrimi i qelizave të bashkuara mund ta fshijë edhe vlerën e master-it F3.
+  const objectName = meta.objectName?.trim() || 'Objekti';
+  setCell(ws, FIXED_CELLS.object.row, FIXED_CELLS.object.col, `Objekti-Building : ${objectName}`);
 
   const headerSlot = slots[0];
   const offerPositionsList = positions.map((p) => p.positionNumber).filter(Boolean).join(', ');
@@ -301,7 +337,7 @@ function fillPageIntoWorksheet(ws: ExcelJS.Worksheet, page: LibriExportPlanPage,
       setCell(ws, rowNumber, 6, line.value);
     });
 
-    const totalRow = slot.measureRow + lines.length;
+    const totalRow = Math.max(slot.gjithsejtRow, slot.measureRow + lines.length);
     setCell(ws, totalRow, 5, 'Gjithsejt :');
     setCell(ws, totalRow, 8, position.total);
   });
@@ -326,7 +362,7 @@ export async function buildLibriSinglePageWorkbook(
   fillPageIntoWorksheet(ws, page, meta);
 
   const buffer = await output.xlsx.writeBuffer();
-  return buffer as ArrayBuffer;
+  return toArrayBuffer(buffer as ArrayBuffer | Uint8Array | Buffer);
 }
 
 export function downloadWorkbookBuffer(buffer: ArrayBuffer, fileName: string): void {
@@ -350,9 +386,10 @@ export async function buildLibriNdertimorZip(
   rows: ParsedRow[],
   meta: ParamasaPreviewMeta,
   templateLoader: (id: TemplateId) => Promise<ExcelJS.Workbook> = loadTemplateWorkbook,
-  sectionTitleOverrides?: Record<string, string>
+  sectionTitleOverrides?: Record<string, string>,
+  planOverride?: LibriExportPlanPage[]
 ): Promise<Blob> {
-  const plan = planLibriExport(rows, sectionTitleOverrides);
+  const plan = planOverride ?? planLibriExport(rows, sectionTitleOverrides);
   const zip = new JSZip();
   const usedNames = new Set<string>();
 

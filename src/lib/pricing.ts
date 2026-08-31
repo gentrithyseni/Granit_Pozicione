@@ -43,7 +43,8 @@ export function calculatePositionPrice(input: PricingInput): PricingBreakdown {
   const subtotal = materialTotal + laborTotal + foodTotal + transportTotal + otherTotal;
   const profitAmount = subtotal * ((Number(input.profitPercent) || 0) / 100);
   const vatBase = subtotal + profitAmount;
-  const vatAmount = vatBase * ((Number(input.vatPercent) || 18) / 100);
+  const vatPercent = input.vatPercent == null ? 18 : Number(input.vatPercent) || 0;
+  const vatAmount = vatBase * (vatPercent / 100);
   const total = vatBase + vatAmount;
   const unitPrice = quantity > 0 ? total / quantity : total;
 

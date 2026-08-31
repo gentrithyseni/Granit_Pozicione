@@ -35,9 +35,12 @@ export function SearchPage() {
         <p className="muted">Kërko në përshkrim, numër pozicioni ose emër projekti (min. 2 karaktere).</p>
       </div>
 
-      <div className="panel">
-        <label>
-          Kërkim global
+      <div className="panel search-panel">
+        <div className="search-panel-head">
+          <strong>Kërkim global</strong>
+          <span className="muted">{query.trim().length >= 2 ? `${results.length} rezultate` : 'Gati për kërkim'}</span>
+        </div>
+        <label className="search-panel-field">
           <input {...register('query')} placeholder="Kërko projekt, pozicion, referencë..." aria-label="Kërko" />
         </label>
       </div>

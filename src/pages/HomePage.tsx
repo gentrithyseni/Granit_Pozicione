@@ -10,6 +10,8 @@ import { fetchCompletedProjects } from '../services/projects';
 import { fetchDashboardStats } from '../services/stats';
 import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue } from '../services/insights';
 import { ensureDefaultCategories } from '../services/categories';
+import { fetchLibriExportRecords, type LibriExportRecord } from '../services/libriExports';
+import { buildLibriNdertimorWorkbook, downloadWorkbookBuffer, planLibriExport } from '../lib/libriExport';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import type { DbProject, ProjectSummary, CategorySummary } from '../types/database';
 
@@ -26,11 +28,14 @@ export function HomePage() {
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
   const [allProjects, setAllProjects] = useState<DbProject[]>([]);
+  const [recentParamasa, setRecentParamasa] = useState<LibriExportRecord | null>(null);
+  const [recentActionId, setRecentActionId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardStats().then(setStats);
     fetchCompletedProjects().then(setReferences);
     fetchTotalSystemValue().then(setTotalValue);
+    fetchLibriExportRecords().then((records) => setRecentParamasa(records[0] ?? null));
 
     (async () => {
       if (!supabase) return;
@@ -63,6 +68,20 @@ export function HomePage() {
     .map((project) => project.name)
     .slice(0, 6);
 
+  const recentPageCount = recentParamasa ? planLibriExport(recentParamasa.rows).length : 0;
+
+  const handleDownloadRecent = async () => {
+    if (!recentParamasa) return;
+    setRecentActionId(recentParamasa.id);
+    try {
+      const buffer = await buildLibriNdertimorWorkbook(recentParamasa.rows, recentParamasa.meta);
+      const safeName = (recentParamasa.fileName || 'Paramasa').replace(/\.[^/.]+$/, '').replace(/\s+/g, ' ').trim() || 'Paramasa';
+      downloadWorkbookBuffer(buffer, `${safeName}-Libri-Ndertimor.xlsx`);
+    } finally {
+      setRecentActionId(null);
+    }
+  };
+
   return (
     <Shell>
       <section className="hero card home-hero">
@@ -72,6 +91,10 @@ export function HomePage() {
             <div className="eyebrow accent">{today}</div>
             <h1>{greeting}.</h1>
             <p className="hero-copy">Ja gjendja e sotme e paramasave, projekteve dhe ofertave.</p>
+          </div>
+          <div className="home-hero-badge">
+            <span className="muted">Vlera e sistemit</span>
+            <strong>{totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</strong>
           </div>
         </div>
 
@@ -88,35 +111,64 @@ export function HomePage() {
             <span className="home-stat-value">{stats.items}</span>
             <span className="home-stat-label">pozicione</span>
           </div>
-          <div className="home-stat home-stat-highlight">
-            <span className="home-stat-value">{totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })}€</span>
-            <span className="home-stat-label">vlera totale</span>
-          </div>
         </div>
       </section>
 
       <section className="cards-grid">
         <NavLink className="big-card card" to="/register">
           <div className="card-icon"><WalletCards size={22} /></div>
-          <h2>Regjistro</h2>
-          <p>Llogarit dhe ruaj një pozicion me kosto të detajuara.</p>
+          <div className="big-card-body">
+            <h2>Regjistro</h2>
+            <p>Llogarit dhe ruaj një pozicion me kosto të detajuara.</p>
+          </div>
+          <span className="big-card-go">Hape →</span>
         </NavLink>
         <NavLink className="big-card card" to="/fature">
           <div className="card-icon"><ReceiptText size={22} /></div>
-          <h2>Krijo Fature</h2>
-          <p>Ngarko shabllonin e faturës dhe plotëso fushat që ndryshojnë.</p>
+          <div className="big-card-body">
+            <h2>Krijo Fature</h2>
+            <p>Ngarko shabllonin e faturës dhe plotëso fushat që ndryshojnë.</p>
+          </div>
+          <span className="big-card-go">Hape →</span>
         </NavLink>
         <NavLink className="big-card card" to="/import">
           <div className="card-icon"><FileUp size={22} /></div>
-          <h2>Ngarko Excel</h2>
-          <p>Ngarko paramasë dhe gjenero faqet e Librit Ndërtimor.</p>
+          <div className="big-card-body">
+            <h2>Libri Ndërtimor</h2>
+            <p>Ngarko paramasë dhe gjenero faqet e Librit Ndërtimor.</p>
+          </div>
+          <span className="big-card-go">Hape →</span>
         </NavLink>
         <NavLink className="big-card card" to="/data">
           <div className="card-icon"><Database size={22} /></div>
-          <h2>Të dhënat</h2>
-          <p>Krahaso projekte, kategori dhe historikun e çmimeve.</p>
+          <div className="big-card-body">
+            <h2>Të dhënat</h2>
+            <p>Krahaso projekte, kategori dhe historikun e çmimeve.</p>
+          </div>
+          <span className="big-card-go">Hape →</span>
         </NavLink>
       </section>
+
+      {recentParamasa && (
+        <section className="panel recent-paramasa-card">
+          <div className="recent-paramasa-head">
+            <div>
+              <h3>Paramasa e fundit</h3>
+              <p className="muted">{recentParamasa.fileName}</p>
+            </div>
+            <div className="recent-paramasa-badges">
+              <span>{recentParamasa.positionsCount} pozicione</span>
+              <span>{recentPageCount} faqe</span>
+            </div>
+          </div>
+          <div className="recent-paramasa-actions">
+            <button type="button" className="card" onClick={handleDownloadRecent} disabled={recentActionId === recentParamasa.id}>
+              {recentActionId === recentParamasa.id ? 'Duke gjeneruar…' : 'Shkarko përsëri'}
+            </button>
+            <NavLink className="card" to="/import">Hape</NavLink>
+          </div>
+        </section>
+      )}
 
       <div className="home-columns">
         <div className="home-column-main">

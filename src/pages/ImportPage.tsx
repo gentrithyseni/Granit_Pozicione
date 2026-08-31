@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
-import { ParamasaPreview, type ParamasaPreviewMeta } from '../components/ParamasaPreview';
+import { ParamasaPreview, type ParamasaPreviewMeta, type PageGroupingMode } from '../components/ParamasaPreview';
 import { ManualPageBuilder } from '../components/ManualPageBuilder';
 import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
 import { parseExcelWithValidation, type ParsedRow } from '../lib/excel';
 import { groupRowsBySection } from '../lib/paramasaPreview';
-import { buildLibriNdertimorWorkbook, buildLibriNdertimorZip, downloadWorkbookBuffer, downloadBlob, planLibriExport } from '../lib/libriExport';
+import { buildLibriNdertimorWorkbook, buildLibriNdertimorZip, downloadWorkbookBuffer, downloadBlob, planLibriExport, type LibriExportPlanPage } from '../lib/libriExport';
 import { saveLibriExportRecord, fetchLibriExportRecords, deleteLibriExportRecord, type LibriExportRecord } from '../services/libriExports';
 import { supabase } from '../lib/supabase';
 import type { DbProject } from '../types/database';
@@ -65,8 +65,22 @@ export function ImportPage() {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
   const [sectionTitleOverrides, setSectionTitleOverrides] = useState<Record<string, string>>({});
+  const [groupingMode, setGroupingMode] = useState<PageGroupingMode>('auto');
+  const [manualPlan, setManualPlan] = useState<LibriExportPlanPage[] | null>(null);
 
   const detectedSections = useMemo(() => groupRowsBySection(rows), [rows]);
+  const autoPlan = useMemo(
+    () => (rows.length > 0 ? planLibriExport(rows, sectionTitleOverrides) : []),
+    [rows, sectionTitleOverrides]
+  );
+  const activePlan = groupingMode === 'manual' && manualPlan ? manualPlan : autoPlan;
+  const importStepIndex = rows.length === 0 ? 0 : groupingMode === 'manual' ? 3 : 2;
+  const workflowSteps = [
+    { title: 'Ngarko', hint: 'Excel-in origjinal' },
+    { title: 'Kontrollo seksionet', hint: 'Rregullo titujt' },
+    { title: 'Rregullo faqet', hint: 'Bashko ose nda' },
+    { title: 'Shkarko', hint: '.xlsx / .zip' },
+  ];
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState('');
   const [previewMode, setPreviewMode] = useState<'table' | 'preview'>('preview');
@@ -127,7 +141,8 @@ export function ImportPage() {
       setDeclaredTotal(fileTotal);
       const selectedProject = projects.find((project) => project.id === selectedProjectId);
       const suggested = suggestPreviewMeta(parsedRows, file.name, selectedProject?.name || '');
-      setPreviewMeta((current) => mergeBlankFields(current, suggested));
+      const mergedMeta = mergeBlankFields(previewMeta, suggested);
+      setPreviewMeta(mergedMeta);
 
       const computedTotal = parsedRows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
       if (fileTotal !== null && Math.abs(fileTotal - computedTotal) > Math.max(1, fileTotal * 0.005)) {
@@ -138,7 +153,6 @@ export function ImportPage() {
       }
 
       if (parsedRows.length > 0) {
-        const mergedMeta = mergeBlankFields(previewMeta, suggested);
         await saveLibriExportRecord(file.name, parsedRows, mergedMeta);
         reloadLibriHistory();
       }
@@ -153,12 +167,26 @@ export function ImportPage() {
     window.print();
   };
 
+  useEffect(() => {
+    setManualPlan(null);
+    setGroupingMode('auto');
+  }, [rows]);
+
+  const handleGroupingModeChange = (mode: PageGroupingMode) => {
+    setGroupingMode(mode);
+    if (mode === 'manual') {
+      setManualPlan(autoPlan);
+    } else {
+      setManualPlan(null);
+    }
+  };
+
   const handleDownloadLibriNdertimor = async () => {
     if (rows.length === 0) return;
     setLibriExportLoading(true);
     try {
-      const plan = planLibriExport(rows, sectionTitleOverrides);
-      const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta, undefined, sectionTitleOverrides);
+      const plan = activePlan;
+      const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta, undefined, sectionTitleOverrides, plan);
       downloadWorkbookBuffer(buffer, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
       const overflowPages = plan.filter((page) => page.overflowWarning).length;
       const mixedPages = plan.filter((page) => page.mixedUnitsWarning).length;
@@ -181,8 +209,8 @@ export function ImportPage() {
     if (rows.length === 0) return;
     setZipExportLoading(true);
     try {
-      const plan = planLibriExport(rows, sectionTitleOverrides);
-      const blob = await buildLibriNdertimorZip(rows, previewMeta, undefined, sectionTitleOverrides);
+      const plan = activePlan;
+      const blob = await buildLibriNdertimorZip(rows, previewMeta, undefined, sectionTitleOverrides, plan);
       downloadBlob(blob, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor-faqet.zip`);
       showToast(`ZIP u shkarkua: ${plan.length} skedarë, një për çdo faqe.`, 'success');
     } catch (error) {
@@ -194,11 +222,6 @@ export function ImportPage() {
 
   const handleUpdateRow = (row: ParsedRow, changes: Partial<ParsedRow>) => {
     setRows((current) => current.map((r) => (r === row ? { ...r, ...changes } : r)));
-  };
-
-  const handleAutoSuggestMeta = () => {
-    const selectedProject = projects.find((project) => project.id === selectedProjectId);
-    setPreviewMeta(suggestPreviewMeta(rows, fileName, selectedProject?.name || ''));
   };
 
   const handleRedownloadHistory = async (record: LibriExportRecord) => {
@@ -223,19 +246,35 @@ export function ImportPage() {
     }
   };
 
-  const handlePageStartSuggestion = () => {
-    const selectedProject = projects.find((project) => project.id === selectedProjectId);
-    setPreviewMeta((meta) => ({
-      ...suggestPreviewMeta(rows, fileName, selectedProject?.name || ''),
-      sectionTitle: meta.sectionTitle || suggestPreviewMeta(rows, fileName, selectedProject?.name || '').sectionTitle,
-    }));
-  };
-
   return (
     <Shell>
       <div className="page-header">
         <h1>Libri Ndërtimor</h1>
         <p className="muted">Ngarko Excel-in, ose krijo faqet manualish duke zgjedhur shabllonin dhe duke plotësuar të dhënat.</p>
+      </div>
+
+      <div className="libri-workflow-card card">
+        <div className="libri-workflow-head">
+          <div>
+            <span className="muted">Hapi tjetër</span>
+            <strong>{rows.length > 0 ? workflowSteps[Math.min(importStepIndex, workflowSteps.length - 1)].title : 'Ngarko Excel'}</strong>
+          </div>
+          <span className="muted">{rows.length > 0 ? `Hapi ${Math.min(importStepIndex + 1, workflowSteps.length)}/4` : 'Hapi 1/4'}</span>
+        </div>
+        <div className="libri-workflow-steps" aria-label="Rrjedha e punës">
+          {workflowSteps.map((step, index) => {
+            const stepState = index < importStepIndex ? 'done' : index === importStepIndex ? 'active' : 'idle';
+            return (
+              <div key={step.title} className={`libri-workflow-step ${stepState}`}>
+                <span className="libri-workflow-step-index">{index + 1}</span>
+                <div>
+                  <strong>{step.title}</strong>
+                  <small>{step.hint}</small>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="import-main-tabs">
@@ -294,14 +333,6 @@ export function ImportPage() {
               Titulli i seksionit
               <input value={previewMeta.sectionTitle} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, sectionTitle: e.target.value }))} placeholder="p.sh. I. Punimet përgatitore" />
             </label>
-          </div>
-          <div className="import-meta-actions">
-            <button type="button" className="card" onClick={handleAutoSuggestMeta} disabled={loading || rows.length === 0}>
-              Sugjero automatikisht
-            </button>
-            <button type="button" className="card" onClick={handlePageStartSuggestion} disabled={loading || rows.length === 0}>
-              Sugjero fillimin e faqes
-            </button>
           </div>
         </div>
 
@@ -380,7 +411,17 @@ export function ImportPage() {
                   <span className="muted">Faqet paketohen automatikisht (auto) — motori i sigurt që s'i përzien seksionet.</span>
                 </div>
 
-                <ParamasaPreview rows={rows} meta={previewMeta} sectionTitleOverrides={sectionTitleOverrides} onUpdateRow={handleUpdateRow} />
+                <ParamasaPreview
+                  rows={rows}
+                  meta={previewMeta}
+                  sectionTitleOverrides={sectionTitleOverrides}
+                  onUpdateRow={handleUpdateRow}
+                  groupingMode={groupingMode}
+                  onGroupingModeChange={handleGroupingModeChange}
+                  manualPlan={manualPlan}
+                  onManualPlanChange={setManualPlan}
+                  onPlanError={(message) => showToast(message, 'error')}
+                />
               </>
             ) : (
               <>
