@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Check, Download, Eye, Trash2 } from 'lucide-react';
 import { ParamasaPreview, type ParamasaPreviewMeta, type PageGroupingMode } from '../components/ParamasaPreview';
 import { ManualPageBuilder } from '../components/ManualPageBuilder';
 import { Shell } from '../components/Shell';
@@ -62,6 +64,7 @@ function mergeBlankFields(current: ParamasaPreviewMeta, suggested: ParamasaPrevi
 }
 
 export function ImportPage() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
   const [sectionTitleOverrides, setSectionTitleOverrides] = useState<Record<string, string>>({});
@@ -74,7 +77,7 @@ export function ImportPage() {
     [rows, sectionTitleOverrides]
   );
   const activePlan = groupingMode === 'manual' && manualPlan ? manualPlan : autoPlan;
-  const importStepIndex = rows.length === 0 ? 0 : groupingMode === 'manual' ? 3 : 2;
+  const importStepIndex = rows.length === 0 ? 0 : groupingMode === 'manual' ? 2 : 1;
   const workflowSteps = [
     { title: 'Ngarko', hint: 'Excel-in origjinal' },
     { title: 'Kontrollo seksionet', hint: 'Rregullo titujt' },
@@ -137,6 +140,12 @@ export function ImportPage() {
     setSectionTitleOverrides({});
     try {
       const { rows: parsedRows, declaredTotal: fileTotal } = await parseExcelWithValidation(file);
+      if (parsedRows.length === 0) {
+        setFileName('');
+        event.target.value = '';
+        showToast('Nuk u gjet asnjë pozicion në këtë Excel. Kontrollo që skedari të ketë kolonat e pozicionit, përshkrimit, sasisë dhe çmimit.', 'error');
+        return;
+      }
       setRows(parsedRows);
       setDeclaredTotal(fileTotal);
       const selectedProject = projects.find((project) => project.id === selectedProjectId);
@@ -237,6 +246,12 @@ export function ImportPage() {
   };
 
   const handleDeleteHistory = async (id: string) => {
+    const record = libriHistory.find((item) => item.id === id);
+    const confirmed = window.confirm(
+      `A je i sigurt që dëshiron ta fshish librin "${record?.fileName || 'e zgjedhur'}"? Ky veprim nuk mund të zhbëhet.`
+    );
+    if (!confirmed) return;
+
     setHistoryActionId(id);
     try {
       await deleteLibriExportRecord(id);
@@ -467,6 +482,15 @@ export function ImportPage() {
                 {zipExportLoading ? 'Duke gjeneruar…' : 'Shkarko çdo faqe veç e veç (.zip)'}
               </button>
               <button className="card import-cancel-btn" type="button" onClick={() => setRows([])} disabled={loading}>Anulo</button>
+              <button
+                className="primary-button import-finish-btn"
+                type="button"
+                onClick={() => navigate('/')}
+                disabled={loading || rows.length === 0 || libriExportLoading || zipExportLoading}
+              >
+                <Check size={16} />
+                Përfundo
+              </button>
             </div>
           </div>
         )}
@@ -488,25 +512,28 @@ export function ImportPage() {
                   <div className="form-actions-row">
                     <button
                       type="button"
-                      className="card"
+                      className="card libri-history-action-btn"
                       onClick={() => setViewingHistoryId(viewingHistoryId === record.id ? null : record.id)}
                     >
-                      {viewingHistoryId === record.id ? 'Mbyll pamjen' : 'Shiko librat-faqet'}
+                      <Eye size={15} />
+                      {viewingHistoryId === record.id ? 'Mbyll pamjen' : 'Shiko'}
                     </button>
                     <button
                       type="button"
-                      className="card"
+                      className="card libri-history-action-btn"
                       onClick={() => handleRedownloadHistory(record)}
                       disabled={historyActionId === record.id}
                     >
+                      <Download size={15} />
                       {historyActionId === record.id ? 'Duke u gjeneruar…' : 'Shkarko përsëri'}
                     </button>
                     <button
                       type="button"
-                      className="card import-cancel-btn"
+                      className="card import-cancel-btn libri-history-action-btn danger-action-btn"
                       onClick={() => handleDeleteHistory(record.id)}
                       disabled={historyActionId === record.id}
                     >
+                      <Trash2 size={15} />
                       Fshi
                     </button>
                   </div>

@@ -83,6 +83,17 @@ function safeUnmerge(ws: ExcelJS.Worksheet, range: string): void {
   try { ws.unMergeCells(range); } catch { /* jo i bashkuar */ }
 }
 
+function safeMergeCells(ws: ExcelJS.Worksheet, range: string): boolean {
+  try {
+    safeUnmerge(ws, range);
+    ws.mergeCells(range);
+    return true;
+  } catch (error) {
+    console.warn(`Nuk mundesh të bashkosh qeliza ${range}:`, error instanceof Error ? error.message : String(error));
+    return false;
+  }
+}
+
 async function loadTemplate(kind: FaturaKind): Promise<ExcelJS.Workbook> {
   const res = await fetch(TEMPLATE_URLS[kind]);
   if (!res.ok) throw new Error(`Shablloni "${kind}" nuk u gjet (${res.status}).`);
@@ -146,26 +157,24 @@ function fillKontrate(ws: ExcelJS.Worksheet, d: FaturaKontrateFields): void {
   ws.getCell(K.totalRow, 9).value = { formula: `J${K.totalRow}-H${K.totalRow}` };
 
   // H12:K14 — klienti (safeUnmerge+mergeCells ruan master cell por mund t'i heqë bordet)
-  safeUnmerge(ws, 'H12:K14');
-  ws.mergeCells('H12:K14');
+  const clientBorders: Partial<ExcelJS.Borders> = { top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
+  safeMergeCells(ws, 'H12:K14');
   const clientCell = ws.getCell(K.clientNameCell);
   clientCell.value = [d.clientName, d.clientNameLine2].filter(Boolean).join('\n');
   clientCell.alignment = { horizontal: 'center', vertical: 'top', wrapText: true, shrinkToFit: false };
   clientCell.font = { name: 'Cambria', size: 18, bold: true };
   clientCell.fill = PEACH_FILL;
-  // Restauro bordet medium nga shablloni (H11:T=medium, H12:L=medium, K12:R=medium, H16:B=medium...)
-  const medium: ExcelJS.BorderStyle = 'medium';
-  clientCell.border = { top: { style: medium }, left: { style: medium }, right: { style: medium } };
+  clientCell.border = clientBorders;
 
   // H16:J16 — adresa
-  safeUnmerge(ws, 'H16:J16');
-  ws.mergeCells('H16:J16');
+  const addressBorders: Partial<ExcelJS.Borders> = { bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
+  safeMergeCells(ws, 'H16:J16');
   const addressCell = ws.getCell(K.clientAddressCell);
   addressCell.value = ` Adresa  : ${d.clientAddress}`;
   addressCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
   addressCell.font = { name: 'Cambria', size: 11, bold: true };
   addressCell.fill = PEACH_FILL;
-  addressCell.border = { bottom: { style: medium }, left: { style: medium }, right: { style: medium } };
+  addressCell.border = addressBorders;
 
   // "PËR" label
   const perLabel = ws.getCell(K.perCell);
@@ -233,8 +242,8 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
     for (let i = 0; i < extra; i++) {
       const tgt = P.firstDataRow + P.templateDataRows + i;
       cloneRowStyle(ws, P.firstDataRow, tgt, 10);
-      try { ws.mergeCells(`A${tgt}:B${tgt}`); } catch {}
-      try { ws.mergeCells(`C${tgt}:F${tgt}`); } catch {}
+      safeMergeCells(ws, `A${tgt}:B${tgt}`);
+      safeMergeCells(ws, `C${tgt}:F${tgt}`);
     }
   }
 
@@ -253,25 +262,24 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
   };
 
   // Klienti G13:J15 — restauro bordet medium pas merge
-  safeUnmerge(ws, 'G13:J15');
-  ws.mergeCells('G13:J15');
+  const clientBordersP: Partial<ExcelJS.Borders> = { top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
+  safeMergeCells(ws, 'G13:J15');
   const clientCell = ws.getCell(P.clientNameCell);
   clientCell.value = [d.clientName, d.clientNameLine2].filter(Boolean).join('\n');
   clientCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   clientCell.font = { name: 'Cambria', size: 18, bold: true };
   clientCell.fill = PEACH_FILL;
-  const mediumP: ExcelJS.BorderStyle = 'medium';
-  clientCell.border = { top: { style: mediumP }, left: { style: mediumP }, right: { style: mediumP } };
+  clientCell.border = clientBordersP;
 
   // Adresa G17:J17 — master=G17, restauro bordet medium
-  safeUnmerge(ws, 'G17:J17');
-  ws.mergeCells('G17:J17');
+  const addressBordersP: Partial<ExcelJS.Borders> = { bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
+  safeMergeCells(ws, 'G17:J17');
   const addressCell = ws.getCell(P.clientAddressCell);
   addressCell.value = `Adresa  :  ${d.clientAddress}`;
   addressCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
   addressCell.font = { name: 'Cambria', size: 11, bold: true };
   addressCell.fill = PEACH_FILL;
-  addressCell.border = { bottom: { style: mediumP }, left: { style: mediumP }, right: { style: mediumP } };
+  addressCell.border = addressBordersP;
   // G16 mund të ketë mbetje — pastro
   ws.getCell('G16').value = '';
 
@@ -290,7 +298,9 @@ export async function buildKontrateWorkbook(data: FaturaKontrateFields): Promise
   const ws = wb.worksheets[0];
   if (!ws) throw new Error('Shablloni i kontratës nuk ka asnjë fletë.');
   fillKontrate(ws, data);
-  return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
+  const buffer = await wb.xlsx.writeBuffer();
+  const bytes = new Uint8Array(buffer);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 export async function buildPozicioneWorkbook(data: FaturaPozicioneFields): Promise<ArrayBuffer> {
@@ -298,7 +308,9 @@ export async function buildPozicioneWorkbook(data: FaturaPozicioneFields): Promi
   const ws = wb.worksheets[0];
   if (!ws) throw new Error('Shablloni i pozicioneve nuk ka asnjë fletë.');
   fillPozicione(ws, data);
-  return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
+  const buffer = await wb.xlsx.writeBuffer();
+  const bytes = new Uint8Array(buffer);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
 export function downloadKontrateInvoice(data: FaturaKontrateFields): Promise<void> {

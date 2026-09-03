@@ -66,7 +66,7 @@ type ColumnMap = {
 // vjetra dygjuhëshe) i kanë titujt e kolonave në serbisht ("Opis pozicija", "Kolicina", "Cena",
 // "Ukupno"), ose e kanë kolonën shqipe në pozicione të ndryshme (herë e para, herë e dyta pas
 // asaj serbisht) — prandaj identifikimi bëhet me fjalëkyçe, jo me indeks fiks të kolonës.
-const DESCRIPTION_KEYWORDS = ['pershkrimi', 'opis'];
+const DESCRIPTION_KEYWORDS = ['pershkrimi', 'shkrimi', 'opis'];
 const UNIT_KEYWORDS = ['njesia', 'jedmer', 'jedinica', 'jed.mer', 'jed mer'];
 const QTY_KEYWORDS = ['sasia', 'kolicina'];
 const PRICE_KEYWORDS = ['cmimi', 'cena'];
@@ -107,7 +107,7 @@ function detectColumnMap(row: unknown[]): ColumnMap | null {
 }
 
 function extractPositionNumber(text: string): string {
-  const match = String(text || '').match(/^\s*([0-9]+(?:\.[0-9]+)*)\b/);
+  const match = String(text || '').match(/^\s*(?:(?:pozicioni|poz\.?)\s*)?([0-9]+(?:\.[0-9]+)*)\b/i);
   return match ? match[1] : '';
 }
 

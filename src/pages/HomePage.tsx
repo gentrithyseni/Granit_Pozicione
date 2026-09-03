@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Database, FileUp, WalletCards, TrendingUp, PieChart, ReceiptText } from 'lucide-react';
+import { Database, FileUp, WalletCards, TrendingUp, PieChart, ReceiptText, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Shell } from '../components/Shell';
 import { StatusBadge } from '../components/StatusBadge';
 import { InsightsCharts } from '../components/InsightsCharts';
@@ -28,6 +28,7 @@ export function HomePage() {
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
   const [allProjects, setAllProjects] = useState<DbProject[]>([]);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [recentParamasa, setRecentParamasa] = useState<LibriExportRecord | null>(null);
   const [recentActionId, setRecentActionId] = useState<string | null>(null);
 
@@ -63,10 +64,21 @@ export function HomePage() {
     });
     return PROJECT_STATUSES.map((s) => ({ ...s, count: counts.get(s.value) || 0 }));
   }, [allProjects]);
-  const inProgressProjects = allProjects
-    .filter((project) => (project.status || 'draft') === 'in_progress')
-    .map((project) => project.name)
-    .slice(0, 6);
+  const selectedProjects = useMemo(
+    () =>
+      selectedStatus
+        ? allProjects
+            .filter((project) => (project.status || 'draft') === selectedStatus)
+            .map((project) => project.name)
+            .slice(0, 8)
+        : [],
+    [allProjects, selectedStatus]
+  );
+
+  const selectedStatusLabel = useMemo(
+    () => PROJECT_STATUSES.find((status) => status.value === selectedStatus)?.label ?? 'Projektet',
+    [selectedStatus]
+  );
 
   const recentPageCount = recentParamasa ? planLibriExport(recentParamasa.rows).length : 0;
 
@@ -176,30 +188,70 @@ export function HomePage() {
             <h3 className="panel-heading-accent"><PieChart size={17} className="panel-heading-icon" />Gjendja e projekteve</h3>
             <p className="muted">Pamje e shpejtë e projekteve draft, në proces dhe të përfunduara.</p>
             <div className="project-status-overview">
-              {statusCounts.map((status) => (
-                <div key={status.value} className={`project-status-card status-${status.value}`}>
-                  <div className="project-status-head">
-                    <StatusBadge status={status.value} />
-                    <strong>{status.count}</strong>
-                  </div>
-                  <div className="project-status-description">{status.label}</div>
-                  <div className="project-status-mini-bar" aria-hidden="true">
-                    <span className={`project-status-mini-fill status-${status.value}`} style={{ width: `${Math.max(12, status.count > 0 ? 100 : 12)}%` }} />
-                  </div>
-                </div>
-              ))}
+              {statusCounts.map((status) => {
+                const isSelected = selectedStatus === status.value;
+                return (
+                  <button
+                    key={status.value}
+                    type="button"
+                    className={`project-status-card status-${status.value} ${isSelected ? 'selected' : ''}`}
+                    onClick={() => setSelectedStatus((current) => (current === status.value ? null : status.value))}
+                    aria-pressed={isSelected}
+                  >
+                    <div className="project-status-head">
+                      <StatusBadge status={status.value} />
+                      <strong>{status.count}</strong>
+                    </div>
+                    <div className="project-status-description">{status.label}</div>
+                    <div className="project-status-mini-bar" aria-hidden="true">
+                      <span className={`project-status-mini-fill status-${status.value}`} style={{ width: `${Math.max(12, status.count > 0 ? 100 : 12)}%` }} />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="project-name-list-wrap">
-              <div className="project-name-list-title">Në proces</div>
-              <div className="project-name-list">
-                {inProgressProjects.length > 0 ? (
-                  inProgressProjects.map((name) => <div key={name} className="project-name-item">{name}</div>)
+            {selectedStatus && (
+              <section className="panel project-reference-panel">
+                <h3 className="panel-heading-accent">
+                  {selectedStatus === 'completed' ? 'Projekte të përfunduara' : `Projekte ${selectedStatusLabel.toLowerCase()}`}
+                </h3>
+                <p className="muted">
+                  {selectedStatus === 'completed'
+                    ? 'Projektet e fundit të përfunduara, si referencë për vlerësime të reja.'
+                    : `Lista e projekteve ${selectedStatusLabel.toLowerCase()} në sistem.`}
+                </p>
+
+                {selectedStatus === 'completed' ? (
+                  references.length > 0 ? (
+                    <div className="reference-list">
+                      {references.slice(0, 6).map((project) => (
+                        <div key={project.id} className="reference-item">
+                          <div>
+                            <strong>{project.name}</strong>
+                            {project.client && <span className="project-item-meta"> — {project.client}</span>}
+                          </div>
+                          <StatusBadge status={project.status} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="muted project-name-item">S'ka projekte të përfunduara.</div>
+                  )
                 ) : (
-                  <div className="muted project-name-item">S'ka projekte në proces.</div>
+                  <div className="project-name-list-wrap">
+                    <div className="project-name-list-title">{selectedStatusLabel}</div>
+                    <div className="project-name-list">
+                      {selectedProjects.length > 0 ? (
+                        selectedProjects.map((name) => <div key={name} className="project-name-item">{name}</div>)
+                      ) : (
+                        <div className="muted project-name-item">S'ka projekte {selectedStatusLabel.toLowerCase()}.</div>
+                      )}
+                    </div>
+                  </div>
                 )}
-              </div>
-            </div>
+              </section>
+            )}
           </section>
 
           {(projectSummaries.length > 0 || categorySummaries.length > 0) && (
@@ -211,26 +263,47 @@ export function HomePage() {
           )}
         </div>
 
-        <aside className="home-column-side">
-          {references.length > 0 && (
-            <section className="panel">
-              <h3 className="panel-heading-accent">Projekte referencë</h3>
-              <p className="muted">Ofertat e mëparshme, si bazë për vlerësime të reja.</p>
-              <div className="reference-list">
-                {references.slice(0, 6).map((project) => (
-                  <div key={project.id} className="reference-item">
-                    <div>
-                      <strong>{project.name}</strong>
-                      {project.client && <span className="project-item-meta"> — {project.client}</span>}
-                    </div>
-                    <StatusBadge status={project.status} />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </aside>
+        <aside className="home-column-side" />
       </div>
+
+      <section className="panel home-admin-section">
+        <h3 className="panel-heading-accent">
+          <Activity size={17} className="panel-heading-icon" />
+          Përmbledhje e shpejtë
+        </h3>
+        <div className="admin-insights-grid">
+          <div className="admin-stat-card">
+            <div className="admin-stat-top">
+              <span className="admin-stat-label">Exporti i fundit</span>
+              <CheckCircle2 size={16} className="admin-stat-icon success" />
+            </div>
+            <div className="admin-stat-value">{recentParamasa ? 'Gati' : 'S\'ka'}</div>
+            <p className="muted admin-stat-note">
+              {recentParamasa ? `${recentPageCount} faqe në librin e fundit` : 'Nuk ka export të kryer'}
+            </p>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-top">
+              <span className="admin-stat-label">Projektet aktive</span>
+              <TrendingUp size={16} className="admin-stat-icon primary" />
+            </div>
+            <div className="admin-stat-value">{allProjects.filter((project) => (project.status || 'draft') === 'in_progress').length}</div>
+            <p className="muted admin-stat-note">
+              {allProjects.filter((project) => (project.status || 'draft') === 'in_progress').length > 0 ? 'në proces' : 'asnjë në proces'}
+            </p>
+          </div>
+          <div className="admin-stat-card">
+            <div className="admin-stat-top">
+              <span className="admin-stat-label">Pozicione të regjistruara</span>
+              <CheckCircle2 size={16} className="admin-stat-icon success" />
+            </div>
+            <div className="admin-stat-value">{stats.items}</div>
+            <p className="muted admin-stat-note">
+              në total
+            </p>
+          </div>
+        </div>
+      </section>
 
       <div className="home-footer-status">
         <span className={`home-supabase-dot ${hasSupabaseConfig ? 'is-connected' : ''}`} />

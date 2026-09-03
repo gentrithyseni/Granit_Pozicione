@@ -503,8 +503,11 @@ export function DataPage() {
               Përshkrimi
               <input value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} />
             </label>
-            <label>
-              Kosto reale finale (€)
+            <div className="project-meta-field with-inline-hint">
+              <label>
+                Kosto reale finale (€)
+              </label>
+              <div className="field-hint field-hint-top">Sa ka kushtuar realisht (jo çmimi i ofertës) — krahasohet automatikisht te "Analiza e çmimeve".</div>
               <input
                 type="number"
                 step="0.01"
@@ -512,8 +515,7 @@ export function DataPage() {
                 onChange={(e) => setMetaActualCost(e.target.value)}
                 placeholder="Plotëso kur projekti mbyllet"
               />
-              <span className="field-hint">Sa ka kushtuar realisht (jo çmimi i ofertës) — krahasohet automatikisht te "Analiza e çmimeve".</span>
-            </label>
+            </div>
             <label>
               Shënime mbi koston reale
               <input value={metaActualNotes} onChange={(e) => setMetaActualNotes(e.target.value)} placeholder="p.sh. shtrenjtim materiali, ditë shtesë..." />

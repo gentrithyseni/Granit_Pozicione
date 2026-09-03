@@ -150,6 +150,63 @@ Rrjedha bazë e sistemit është:
 
 Kjo e bën aplikacionin të përshtatshëm për përdorim praktik në menaxhimin e paramasave dhe dokumentacionit ndërtimor.
 
+### 7.3 Si lexohet dhe interpretohet Excel-i
+
+Një nga pjesët më të rëndësishme të sistemit është importi dhe interpretimi i të dhënave nga skedarët Excel. Ky proces është implementuar në mënyrë që aplikacioni të mos mbështetet vetëm në strukturën e një fletë të caktuar, por të jetë i aftë të lexojë dokumente realë të ndryshëm, me tituj të kolonave në gjuhë të ndryshme, renditje të ndryshme të kolonave dhe sekcione të ndara në të njëjtin skedar.
+
+Procesi fillon në faqen [src/pages/ImportPage.tsx](src/pages/ImportPage.tsx). Kur përdoruesi ngarkon një skedar, funksioni `handleFileUpload` thërret `parseExcelWithValidation(file)`, i vendosur në [src/lib/excel.ts](src/lib/excel.ts). Brenda këtij funksioni, skedari lexohet me bibliotekën `xlsx` në formatin e byte-array, dhe secila fletë Excel konvertohet në një matricë të rreshtave. Kjo është thelbësore sepse sistemi jo vetëm që lexon vlerat, por edhe identifikon strukturën logjike të dokumentit: ku fillon header-i, ku mbaron një seksion, ku ndodhen kolona e sasisë, kolona e çmimit dhe kolona e totals.
+
+Për të zbuluar kolona e duhura, sistemi nuk përdor indekse fikse të kolonave, por një metodë të bazuar në fjalëkyçe. Funksioni `detectColumnMap` kërkon qeliza që përmbajnë terma si `pershkrimi`, `njesia`, `sasia`, `cmimi`, `shuma`, dhe përkatësisht versionet e tyre në serbisht ose boshnjakisht, si `Opis`, `Kolicina`, `Cena`, `Ukupno`. Ky model u jep sistemit fleksibilitet të lartë, sepse një skedar i njëjtë mund të jetë i strukturuar ndryshe nga një dokument tjetër, por të interpretohet me të njëjtin logjik.
+
+Pas identifikimit të kolonave, funksioni `parseStructuredRows` fillon përpunimin e rreshtave individualë. Këtu sistemi bën një sërë kontrollesh të rëndësishme:
+
+- zbulon nëse një rresht është titull i një dokumenti ose oferte të re, jo një pozicion normal,
+- identifikon titujt e seksioneve, si për shembull një numër romak ose një seksion i shënuar si `II PUNËT E DEMOLIMIT`,
+- ndalon rreshtat e nënshkrimit ose të fundit të dokumentit,
+- bashkon rreshtat e vazhdueshëm ku një pozicion ka përshkrim të përgjithshëm, por sasinë dhe çmimin e vërtetë i ndanë në disa rreshta të mëvonshëm,
+- llogarit totalin e pozicionit si `quantity × unitPrice` ose sipas totalit të dhënë eksplicit nga skedari.
+
+Kjo qasje është e rëndësishme sepse në dokumentet reale të ndërtimit, të dhënat shpesh nuk janë perfekte. Ka raste ku një pozicion ka një rresht titulli dhe më pas disa rreshta të vazhdueshëm për variante të ndryshme, ose ku një dokument i ri fillon në të njëjtin skedar pas një seksioni tjetër. Sistemi e menaxhon këtë gjendje duke ruajtur kontekstin e seksionit dhe duke ndarë dokumentet në mënyrë logjike, për të mos përzier pozicione nga kategori ose tabela të ndryshme.
+
+Pas leximit të rreshtave, aplikacioni llogarit edhe totalin e deklaruar nga vetë skedari dhe e krahason me totalin e llogaritur nga sistemet. Nëse ka një devijim të madh, përdoruesi merr një paralajmërim. Kjo është shumë e rëndësishme në kontekstin e ndërtimit, ku një gabim i vogël në Excel mund të çojë në një vlerë të papërshtatshme të ofertës ose të dokumentit final. Ky funksionalitet është implementuar përmes `parseExcelWithValidation`, dhe lidhjen e saktë midis Excel-it dhe totalit të llogaritur e bën sistemin shumë më të besueshëm për përdorim praktik.
+
+Mekanizmi i importit nuk përfundon me leximin e të dhënave. Pas përpunimit, rrjedha vazhdon në [src/lib/paramasaPreview.ts](src/lib/paramasaPreview.ts), [src/lib/libriPaging.ts](src/lib/libriPaging.ts) dhe [src/lib/libriExport.ts](src/lib/libriExport.ts), ku rreshtat grupohen sipas seksioneve, planifikohen faqet, llogariten variablat e metadata-s dhe prodhohet preview para eksportit. Kështu, një skedar Excel nuk kalon thjesht si “tekst”, por shndërrohet në një model të strukturuar të pozicioneve, seksioneve dhe totalëve që përdoret më pas për eksportin e Librit Ndërtimor dhe për analizën e projekteve.
+
+Kjo është një nga pjesët më të interesantet e sistemit, sepse tregon se si një zgjidhje e bazuar në React dhe TypeScript mund të transformojë të dhëna të papërpunuara nga Excel në një model të organizuar dhe të përdorshëm në një aplikacion real të menaxhimit të projekteve ndërtimore.
+
+### 7.4 Logjika e grupimit, planifikimit të faqeve dhe metadata-s
+
+Pasi të dhënat e importuara janë të strukturuara, sistemi kalon në një nivel tjetër më kompleks: grupimin sipas seksioneve, vendosjen e faqeve dhe menaxhimin e metadata-s së dokumentit. Kjo është logjika që e bën aplikacionin jo vetëm një “parser Excel”, por një sistem real i përgatitjes së dokumentacionit ndërtimor.
+
+Pjesa e parë e këtij procesi ndodhet në [src/lib/paramasaPreview.ts](src/lib/paramasaPreview.ts), ku funksioni `groupRowsBySection` mbledh pozicionet sipas seksionit përkatës. Kjo është e rëndësishme, sepse një skedar i madh përbëhet shpesh nga disa seksione të ndryshme: demolim, betonarme, elektrikë, hidraulikë, gdhendje, etj. Pa grupim të saktë, pozicione të ndryshme do të përziheshin, duke çuar në faqe të pasakta dhe dokumentacion të paorganizuar. Grupimi bazohet në informacionin e pozicionit, në titullin e seksionit dhe, kur është e nevojshme, edhe në indeksin e tabelës nga e cila vjen rreshti.
+
+Më pas, sistemi përdor funksionin `planLibriExport` në [src/lib/libriExport.ts](src/lib/libriExport.ts). Ky funksion merr rastin e rreshtave të grupuar dhe vendos se cilat pozicione shkojnë në cila faqe. Logjika nuk është thjesht “të ndajë në faqe të barabarta”, por merr parasysh disa faktorë realë të projektit, si:
+
+- gjatësia e përshkrimit të një pozicioni,
+- numri i rreshtave që hyjnë në një faqe të modelit Excel,
+- njësi të ndryshme brenda të njëjtit seksion,
+- rreziku i mbushjes së faqes ose “overflow” të përshkrimeve,
+- nevojën për të ndarë seksione të mëdha në më shumë se një faqe.
+
+Ky proces është shumë i rëndësishëm për një aplikacion të ndërtimit, sepse dokumentet e Librit Ndërtimor duhet të përputhen me formatin e shablloneve origjinale. Nëse një faqe mbushet gabim, dokumenti në Excel mund të duket i pasaktë, me rreshta jashtë kufijve, ose me një përshkrim që e bën të pamundur printimin e saktë.
+
+Pjesa tjetër e rëndësishme është `previewMeta` dhe metadata për dokumentin final. Në [src/pages/ImportPage.tsx](src/pages/ImportPage.tsx), sistemi krijon një objekt `ParamasaPreviewMeta` me fushat e rëndësishme si:
+
+- `executorName` (përgjegjës / ekzekutues),
+- `month` dhe `date`,
+- `objectName` (objekti / projekti),
+- `offerAccount` (nr. i ofertës),
+- `offerPositions` (lista e pozicioneve),
+- `sectionTitle` (titulli i seksionit / pjesës së dokumentit).
+
+Kjo metadata është e rëndësishme sepse u jep dokumentit të eksportuar një kontekst të plotë. Deri vonë, shumë aplikacione ndërtimore e trajtojnë këtë pjesë si një detaj dytësor, por në praktikë ajo është thelbësore për identitetin dhe korrektësinë e dokumentit final. Në sistemin tonë, metadata mbushet automatikisht nga skedari i importuar, por përdoruesi mund ta modifikojë atë përmes `sectionTitleOverrides` dhe përmes përzgjedhjes së projekti të lidhur.
+
+Në një nivel më të avancuar, sistemi mbështet edhe mënyrën `manual` të grupimit dhe `auto` të grupimit. Në modalitetin automat, faqet planifikohen me logjikë të gjeneruar nga data dhe seksionet; në modalitetin manual, përdoruesi mund të rregullojë përbërjen e faqeve dhe të kontrollojë se si pjesëtohet dokumenti. Kjo duket e thjeshtë për përdoruesin, por nën kapak përfshin një logjikë komplekse: mbajtur në version të qëndrueshëm, dhe në një sistem ku dokumentimi është kritik, kontrolli manual i planit e bën procesin shumë më të besueshëm.
+
+Në fund, përfundimi i gjithë kësaj rrjedhe është eksporti real i dokumentit. Funksionet `buildLibriNdertimorWorkbook` dhe `buildLibriNdertimorZip` e marrin planin final të faqes, e kombinojnë me shabllonet origjinale të Excel-it dhe e prodhojnë një dokument të gatshëm për printim ose shpërndarje. Kjo është pikërisht ajo që e bën projektin më shumë se një UI e thjeshtë: është një platformë që transformon dokumente të papërpunuara në produkte të standardizuara dhe të përdorshme në praktikë.
+
+Kjo logjikë është thelbësore për temën e diplomës, sepse tregon qartë se si një sistem web nuk është vetëm “paraqitje grafike”, por një kombinim i analizës së të dhënave, modelimit logjik, validimit dhe automatizimit të proceseve profesionale.
+
 ## 8. Funksionalitetet kryesore
 
 ### 8.1 Ballina / Dashboard
