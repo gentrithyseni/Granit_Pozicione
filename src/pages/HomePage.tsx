@@ -8,7 +8,7 @@ import { hasSupabaseConfig } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { fetchCompletedProjects } from '../services/projects';
 import { fetchDashboardStats } from '../services/stats';
-import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue } from '../services/insights';
+import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue, fetchTransportCityUsage, type CityUsageSummary } from '../services/insights';
 import { ensureDefaultCategories } from '../services/categories';
 import { fetchLibriExportRecords, type LibriExportRecord } from '../services/libriExports';
 import { buildLibriNdertimorWorkbook, downloadWorkbookBuffer, planLibriExport } from '../lib/libriExport';
@@ -27,6 +27,7 @@ export function HomePage() {
   const [totalValue, setTotalValue] = useState(0);
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
+  const [cityUsage, setCityUsage] = useState<CityUsageSummary[]>([]);
   const [allProjects, setAllProjects] = useState<DbProject[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [recentParamasa, setRecentParamasa] = useState<LibriExportRecord | null>(null);
@@ -47,6 +48,7 @@ export function HomePage() {
       setAllProjects(projects || []);
       setProjectSummaries(await fetchProjectSummaries(projects || []));
       setCategorySummaries(await fetchCategorySummaries(categories));
+      setCityUsage(await fetchTransportCityUsage());
     })();
   }, []);
 
@@ -69,7 +71,6 @@ export function HomePage() {
       selectedStatus
         ? allProjects
             .filter((project) => (project.status || 'draft') === selectedStatus)
-            .map((project) => project.name)
             .slice(0, 8)
         : [],
     [allProjects, selectedStatus]
@@ -243,8 +244,18 @@ export function HomePage() {
                     <div className="project-name-list-title">{selectedStatusLabel}</div>
                     <div className="project-name-list">
                       {selectedProjects.length > 0 ? (
-                        selectedProjects.map((name) => <div key={name} className="project-name-item">{name}</div>)
-                      ) : (
+                       selectedProjects.map((project) => (
+                        <div key={project.id} className="project-name-item">
+                          <div>
+                            <strong>{project.name}</strong>
+                            {project.client && (
+                              <span className="project-item-meta"> — {project.client}</span>
+                            )}
+                          </div>
+
+                          <StatusBadge status={project.status} />
+                        </div>
+                      ))) : (
                         <div className="muted project-name-item">S'ka projekte {selectedStatusLabel.toLowerCase()}.</div>
                       )}
                     </div>
@@ -258,7 +269,7 @@ export function HomePage() {
             <section className="panel">
               <h3 className="panel-heading-accent"><TrendingUp size={17} className="panel-heading-icon" />Statistika</h3>
               <p className="muted">Vlera sipas projektit dhe shpërndarja e pozicioneve sipas kategorisë.</p>
-              <InsightsCharts projectSummaries={projectSummaries} categorySummaries={categorySummaries} />
+              <InsightsCharts projectSummaries={projectSummaries} categorySummaries={categorySummaries} cityUsage={cityUsage} />
             </section>
           )}
         </div>

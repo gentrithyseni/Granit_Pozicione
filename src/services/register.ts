@@ -88,7 +88,7 @@ export async function saveRegisterRow(values: RegisterFormValues) {
     { project_item_id: item.id, expense_type: 'material', description: 'Material', unit_cost: Number(values.materialPrice) || 0, quantity, total_cost: materialTotal },
     { project_item_id: item.id, expense_type: 'labor', description: 'Puna', unit_cost: Number(values.laborPrice) || 0, quantity, total_cost: laborTotal },
     { project_item_id: item.id, expense_type: 'food', description: 'Ushqim', unit_cost: Number(values.foodPrice) || 0, quantity: Number(values.days) || 0, total_cost: foodTotal },
-    { project_item_id: item.id, expense_type: 'transport', description: 'Transport', unit_cost: Number(values.transportPrice) || 0, quantity: Number(values.days) || 0, total_cost: transportTotal },
+    { project_item_id: item.id, expense_type: 'transport', description: `Transport: ${values.location?.trim() || 'Pa qytet'}`, unit_cost: Number(values.transportPrice) || 0, quantity: Number(values.days) || 0, total_cost: transportTotal },
     { project_item_id: item.id, expense_type: 'other', description: 'Tjera', unit_cost: otherTotal, quantity: 1, total_cost: otherTotal },
   ]);
   if (expensesError) throw expensesError;

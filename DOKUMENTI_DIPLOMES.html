@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Temë Diplome - Graniti Web</title>
+  <title>Zhvillim i Sistemit për Vlerësimin e Ofertave dhe Menaxhimin e të Dhënave në Projekte</title>
   <style>
     :root {
       --text: #1f2937;
@@ -314,9 +314,9 @@
   <div class="page">
     <section class="cover">
       <div class="kicker">Temë Diplome</div>
-      <h1>Zhvillimi i një platforme web për menaxhimin e paramasave, ofertave dhe Librit Ndërtimor në ndërtim</h1>
+      <h1>Zhvillim i Sistemit për Vlerësimin e Ofertave dhe Menaxhimin e të Dhënave në Projekte</h1>
       <p class="subtitle">
-        Dokument formal i përgatitur mbi bazën e repository-t ekzistues të projektit, duke përfshirë kodin burimor,
+        Dokument formal për një sistem web që vlerëson ofertat dhe menaxhon të dhënat e projekteve, i përgatitur mbi bazën e repository-t ekzistues duke përfshirë kodin burimor,
         skemën e databazës, shërbimet, faqet, komponentët dhe materialet shembull të ruajtura në folderët
         <code>Fatura</code> dhe <code>Paramasa</code>.
       </p>
@@ -340,11 +340,13 @@
           <li><a href="#metodologjia">Metodologjia</a></li>
           <li><a href="#teknologjite">Teknologjitë</a></li>
           <li><a href="#arkitektura">Arkitektura e sistemit</a></li>
+          <li><a href="#vleresimi">Vlerësimi i ofertave</a></li>
           <li><a href="#funksionalitetet">Funksionalitetet</a></li>
           <li><a href="#teDhenat">Të dhënat dhe skema</a></li>
           <li><a href="#faqet">Faqet e aplikacionit</a></li>
           <li><a href="#funksione">Funksionet kryesore</a></li>
           <li><a href="#testimi">Testimi dhe vlerësimi</a></li>
+          <li><a href="#mbrojtja">Përgatitja për mbrojtje</a></li>
           <li><a href="#screenshots">Screenshot / Figura</a></li>
           <li><a href="#perparesite">Përparësitë dhe zhvillimi i mëtejshëm</a></li>
           <li><a href="#referencat">Referencat</a></li>
@@ -513,6 +515,28 @@
       </div>
     </section>
 
+    <section class="section" id="vleresimi">
+      <h2>7.1 Si bëhet vlerësimi i ofertës</h2>
+      <p>
+        Vlerësimi i ofertës ndërtohet nga kostoja e materialit, puna, ushqimi, transporti dhe shpenzimet e tjera.
+        Mbi koston bazë aplikohen përqindja e fitimit dhe TVSH-ja. Kjo e bën të mundur që përdoruesi të shohë jo vetëm
+        totalin, por edhe komponentët që e krijojnë çmimin final.
+      </p>
+      <div class="note">
+        <strong>Formula bazë:</strong> Kostoja bazë = materiali + puna + ushqimi + transporti + shpenzimet e tjera.
+        Çmimi i ofertës krijohet pasi aplikohen fitimi dhe TVSH-ja.
+      </div>
+      <ul>
+        <li><strong>Kostoja e planifikuar</strong>: shpenzimet e parashikuara para ose gjatë ofertimit.</li>
+        <li><strong>Çmimi i ofertës</strong>: vlera që i ofrohet klientit pas fitimit dhe TVSH-së.</li>
+        <li><strong>Kostoja reale</strong>: shpenzimi final pasi projekti ka përfunduar.</li>
+      </ul>
+      <p>
+        Përmes këtij dallimi, sistemi mund të krahasojë parashikimin me rezultatin real dhe të tregojë nëse oferta ka
+        qenë e nënvlerësuar ose nëse projekti ka përfunduar me kosto më të ulët se pritjet.
+      </p>
+    </section>
+
     <section class="section" id="funksionalitetet">
       <h2>7. Funksionalitetet kryesore</h2>
       <ul>
@@ -593,6 +617,22 @@
         Për këtë projekt është e rëndësishme të testohen edhe shembujt realë të ruajtur në folderët
         <code>Fatura</code> dhe <code>Paramasa</code>, sepse ato përfaqësojnë mënyrën reale të përdorimit.
       </p>
+    </section>
+
+    <section class="section" id="mbrojtja">
+      <h2>11.1 Çfarë duhet të kuptohet për mbrojtjen</h2>
+      <p>
+        Gjatë mbrojtjes është më e rëndësishme të shpjegohet rrjedha e sistemit dhe arsyeja e vendimeve teknike,
+        jo të memorizohet çdo rresht i kodit.
+      </p>
+      <ol>
+        <li><strong>Problemi:</strong> të dhënat dhe ofertat ishin të shpërndara në Excel dhe dokumente manuale.</li>
+        <li><strong>Zgjidhja:</strong> sistemi centralizon projektet, kategoritë, pozicionet dhe shpenzimet.</li>
+        <li><strong>Rrjedha:</strong> të dhënat futen ose importohen, validohen, ruhen dhe shfaqen në preview ose eksport.</li>
+        <li><strong>Databaza:</strong> projektet ruhen në <code>projects</code>, pozicionet në <code>project_items</code> dhe kostot në <code>item_expenses</code>.</li>
+        <li><strong>Teknologjitë:</strong> React për ndërfaqen, TypeScript për tipizim, Supabase për databazën dhe xlsx/exceljs për dokumentet.</li>
+        <li><strong>Kufizimet:</strong> Excel-i duhet të ketë strukturë të lexueshme dhe kostoja reale duhet të plotësohet pas përfundimit të projektit.</li>
+      </ol>
     </section>
 
     <section class="section" id="screenshots">

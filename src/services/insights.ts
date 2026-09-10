@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { TRANSPORT_OPTIONS } from '../constants/transport';
 import type { CategorySummary, DbProject, ProjectSummary } from '../types/database';
 
 export async function fetchProjectSummaries(projects: DbProject[]): Promise<ProjectSummary[]> {
@@ -52,6 +53,30 @@ export async function fetchCategorySummaries(categories: { id: string; name: str
 }
 
 export type MonthlyRevenuePoint = { month: string; label: string; total: number; count: number; average: number };
+
+export type CityUsageSummary = { city: string; count: number };
+
+export async function fetchTransportCityUsage(): Promise<CityUsageSummary[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('item_expenses').select('description, unit_cost').eq('expense_type', 'transport');
+  if (error || !data) return [];
+
+  const counts = new Map<string, number>();
+  data.forEach((row) => {
+    const description = String(row.description || '');
+    let city = description.replace(/^transport\s*:\s*/i, '').trim();
+    if (!city || ['transport', 'pa qytet'].includes(city.toLowerCase())) {
+      const matchingCities = TRANSPORT_OPTIONS.filter((option) => option.price === Number(row.unit_cost)).map((option) => option.name);
+      city = matchingCities.length === 1 ? matchingCities[0] : '';
+    }
+    if (!city) return;
+    counts.set(city, (counts.get(city) || 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .map(([city, count]) => ({ city, count }))
+    .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
+}
 
 /** Trendi i vlerës totale (të ofertuar) sipas muajit — bazuar në created_at të pozicioneve.
  * Përdoret për të parë a po rritet biznesi me kohë (jo fitimi, thjesht vëllimi i ofertave). */

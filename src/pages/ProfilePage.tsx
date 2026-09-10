@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { CheckCircle2, DatabaseBackup, KeyRound, ShieldCheck } from 'lucide-react';
 import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
 import { hasSupabaseConfig } from '../lib/supabase';
@@ -70,7 +71,8 @@ export function ProfilePage() {
         <p className="muted">Llogaria, backup dhe cilësimet e hyrjes.</p>
       </div>
 
-      <div className="panel profile-panel">
+      <div className="profile-layout">
+        <div className="panel profile-panel">
         {hasSupabaseConfig && user ? (
           <>
             <p><strong>Email:</strong> {user.email}</p>
@@ -128,6 +130,25 @@ export function ProfilePage() {
         ) : (
           <p className="muted">Auth nuk është aktiv — konfiguro Supabase ose hyr në /login.</p>
         )}
+        </div>
+
+        <aside className="panel profile-side-panel">
+          <div className="profile-side-icon"><ShieldCheck size={22} /></div>
+          <div>
+            <span className="profile-side-kicker">Siguria e llogarisë</span>
+            <h2>Llogaria jote është aktive</h2>
+            <p className="muted">Menaxho hyrjen, ruaj një kopje të të dhënave dhe mbaj kontrollin e projektit.</p>
+          </div>
+          <div className="profile-side-list">
+            <div><CheckCircle2 size={17} /><span>Autentikimi me Supabase</span></div>
+            <div><KeyRound size={17} /><span>Password i ndryshueshëm</span></div>
+            <div><DatabaseBackup size={17} /><span>Backup JSON i shkarkueshëm</span></div>
+          </div>
+          <div className="profile-side-note">
+            <strong>Backup i rregullt</strong>
+            <span>Shkarko backup-in para ndryshimeve të mëdha në të dhëna.</span>
+          </div>
+        </aside>
       </div>
     </Shell>
   );

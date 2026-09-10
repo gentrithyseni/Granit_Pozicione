@@ -1,5 +1,6 @@
 import { VictoryAxis, VictoryBar, VictoryChart, VictoryContainer, VictoryPie, VictoryTheme, VictoryLabel } from 'victory';
 import type { CategorySummary, ProjectSummary } from '../types/database';
+import type { CityUsageSummary } from '../services/insights';
 
 const emerald = '#10b981';
 const categoryColors = ['#10b981', '#3b82f6', '#f59e0b', '#a855f7', '#ef4444', '#14b8a6', '#eab308', '#6366f1'];
@@ -7,13 +8,14 @@ const categoryColors = ['#10b981', '#3b82f6', '#f59e0b', '#a855f7', '#ef4444', '
 type Props = {
   projectSummaries: ProjectSummary[];
   categorySummaries: CategorySummary[];
+  cityUsage: CityUsageSummary[];
 };
 
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}...` : text;
 }
 
-export function InsightsCharts({ projectSummaries, categorySummaries }: Props) {
+export function InsightsCharts({ projectSummaries, categorySummaries, cityUsage }: Props) {
   if (projectSummaries.length === 0 && categorySummaries.length === 0) {
     return <p className="muted chart-empty">Shto te dhena per grafiket.</p>;
   }
@@ -26,7 +28,7 @@ export function InsightsCharts({ projectSummaries, categorySummaries }: Props) {
   const totalCategoryCount = categorySummaries.reduce((sum, c) => sum + c.count, 0);
   const topProject = sortedProjects[0];
   const topCategoryByValue = sortedCategoriesByValue[0];
-  const averageProjectValue = projectSummaries.length > 0 ? totalProjectValue / projectSummaries.length : 0;
+  const mostUsedCity = cityUsage[0];
   const topProjectShare = topProject && totalProjectValue > 0 ? Math.round((topProject.total / totalProjectValue) * 100) : 0;
 
   return (
@@ -38,9 +40,9 @@ export function InsightsCharts({ projectSummaries, categorySummaries }: Props) {
           <small>{projectSummaries.length} projekte me vlere</small>
         </div>
         <div className="insight-metric">
-          <span className="muted">Mesatarja per projekt</span>
-          <strong>{averageProjectValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })}€</strong>
-          <small>per projekte aktive ne statistika</small>
+          <span className="muted">Qyteti më i përdorur</span>
+          <strong>{mostUsedCity?.city || 'Pa të dhëna'}</strong>
+          <small>{mostUsedCity ? `${mostUsedCity.count} përdorime transporti` : 'Regjistro pozicione me qytet'}</small>
         </div>
         <div className="insight-metric">
           <span className="muted">Koncentrimi kryesor</span>

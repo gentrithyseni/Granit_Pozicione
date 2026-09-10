@@ -9,21 +9,21 @@
 - **Numri i indeksit:** [Plotëso]
 - **Mentori:** [Plotëso]
 - **Viti akademik:** 2025/2026
-- **Titulli i temës:** Zhvillimi i një platforme web për menaxhimin e paramasave, ofertave dhe Librit Ndërtimor në ndërtim
+- **Titulli i temës:** Zhvillim i Sistemit për Vlerësimin e Ofertave dhe Menaxhimin e të Dhënave në Projekte
 
 ---
 
 ## Përmbledhje
 
-Ky projekt paraqet zhvillimin e një aplikacioni web për menaxhimin e proceseve që lidhen me përgatitjen e paramasave, ofertave, faturave dhe të dhënave të projekteve ndërtimore. Zgjidhja është ndërtuar për të zëvendësuar punën manuale të shpërndarë në skedarë Excel dhe dokumente të ndryshme me një sistem të centralizuar, të strukturuar dhe të shpejtë për përdorim.
+Ky projekt paraqet zhvillimin e një sistemi web për vlerësimin e ofertave dhe menaxhimin e të dhënave në projekte. Zgjidhja është ndërtuar për të zëvendësuar punën manuale të shpërndarë në skedarë Excel dhe dokumente të ndryshme me një sistem të centralizuar, të strukturuar dhe të shpejtë për përdorim.
 
-Aplikacioni mundëson regjistrim manual të pozicioneve, import të të dhënave nga Excel, gjenerim të Librit Ndërtimor, krahasim të projekteve dhe kategorive, kërkim global në të dhëna, si dhe menaxhim të llogarisë së përdoruesit. Për realizimin e projektit janë përdorur React, TypeScript, Vite, Supabase dhe biblioteka të tjera ndihmëse për forma, eksportim dhe vizualizim të të dhënave.
+Aplikacioni mundëson regjistrim manual të pozicioneve, import të të dhënave nga Excel, llogaritje dhe vlerësim të ofertave, gjenerim të dokumenteve, krahasim të projekteve dhe kategorive, kërkim global në të dhëna, si dhe menaxhim të llogarisë së përdoruesit. Për realizimin e projektit janë përdorur React, TypeScript, Vite, Supabase dhe biblioteka të tjera ndihmëse për forma, eksportim dhe vizualizim të të dhënave.
 
 Ky dokument është hartuar duke u bazuar në kodin dhe skedarët ekzistues të repository-t, përfshirë [App.tsx](App.tsx), faqet në [src/pages](src/pages), shërbimet në [src/services](src/services), skemën e databazës në [database-schema.sql](database-schema.sql), si dhe materialet shembull në folderët [Fatura](Fatura) dhe [Paramasa](Paramasa).
 
 ## Fjalë kyçe
 
-Paramasa, Libri Ndërtimor, aplikacion web, React, TypeScript, Supabase, Excel, faturë, menaxhim projektesh.
+Vlerësim ofertash, menaxhim të dhënash, paramasa, aplikacion web, React, TypeScript, Supabase, Excel, menaxhim projektesh.
 
 ## 1. Hyrje
 
@@ -207,6 +207,34 @@ Në fund, përfundimi i gjithë kësaj rrjedhe është eksporti real i dokumenti
 
 Kjo logjikë është thelbësore për temën e diplomës, sepse tregon qartë se si një sistem web nuk është vetëm “paraqitje grafike”, por një kombinim i analizës së të dhënave, modelimit logjik, validimit dhe automatizimit të proceseve profesionale.
 
+### 7.5 Si bëhet vlerësimi i ofertës
+
+Vlerësimi i ofertës në këtë sistem ndërtohet nga kostoja e pozicionit dhe nga përqindjet e fitimit dhe TVSH-së. Për çdo pozicion përdoruesi mund të vendosë sasinë, çmimin e materialit, çmimin e punës, ditët e punës, ushqimin, transportin, shpenzimet e tjera, fitimin dhe TVSH-në.
+
+Fillimisht llogariten shpenzimet bazë:
+
+```text
+Materiali = sasia × çmimi i materialit
+Puna = sasia × çmimi i punës
+Ushqimi = ditët × çmimi i ushqimit
+Transporti = ditët × çmimi i transportit
+Kostoja bazë = materiali + puna + ushqimi + transporti + shpenzimet e tjera
+```
+
+Mbi koston bazë aplikohet fitimi dhe më pas TVSH-ja. Kjo ndarje e bën ofertën të kontrollueshme, sepse përdoruesi mund të shohë jo vetëm totalin, por edhe se cilët komponentë e krijojnë atë total. Formula kryesore është e implementuar në [src/lib/pricing.ts](src/lib/pricing.ts) dhe përdoret gjatë regjistrimit ose editimit të një pozicioni.
+
+Ky model e ndihmon përdoruesin të marrë vendime më të informuara. Për shembull, nëse një ofertë del shumë e lartë, mund të analizohet nëse shkaku është materiali, puna, transporti, fitimi ose TVSH-ja. Në këtë mënyrë sistemi nuk shërben vetëm për ruajtjen e një çmimi përfundimtar, por edhe për shpjegimin e mënyrës se si është ndërtuar oferta.
+
+Përveç vlerësimit fillestar, sistemi ruan edhe historikun e çmimeve. Çdo regjistrim ose editim i pozicionit mund të krijojë një snapshot të ri në tabelën `price_history`. Kjo e mundëson krahasimin e çmimeve me kalimin e kohës dhe ndihmon në vlerësimin e ofertave të ardhshme duke u bazuar në të dhëna historike.
+
+Duhet të bëhet dallimi ndërmjet tri vlerave:
+
+- **Kostoja e planifikuar**: shpenzimet e parashikuara para ose gjatë ofertimit.
+- **Çmimi i ofertës**: vlera që i ofrohet klientit pas aplikimit të fitimit dhe TVSH-së.
+- **Kostoja reale**: shpenzimi final i projektit pasi puna ka përfunduar.
+
+Ky dallim lejon që sistemi të krahasojë parashikimin me realitetin. Nëse kostoja reale është më e lartë se ajo e planifikuar, sistemi tregon se oferta ka qenë e nënvlerësuar; nëse është më e ulët, projekti ka pasur rezultat më të mirë se parashikimi.
+
 ## 8. Funksionalitetet kryesore
 
 ### 8.1 Ballina / Dashboard
@@ -349,6 +377,23 @@ Testimi i projektit duhet të fokusohet në këto raste:
 - eksporti i backup-it.
 
 Vlerësimi praktik tregon nëse aplikacioni përmirëson kohën e punës dhe ul gabimet krahasuar me procesin manual.
+
+### 13.1 Çfarë duhet të kuptojë autori për mbrojtjen e temës
+
+Gjatë prezantimit nuk është e nevojshme të shpjegohet çdo rresht i kodit. Më e rëndësishme është të kuptohet rrjedha dhe arsyeja e vendimeve teknike. Autori duhet të jetë në gjendje të shpjegojë këto pika:
+
+1. **Problemi**: të dhënat dhe ofertat menaxhoheshin në Excel dhe dokumente të ndara, prandaj kishte përsëritje, gabime dhe vështirësi në kërkim.
+2. **Zgjidhja**: sistemi centralizon projektet, kategoritë, pozicionet, shpenzimet dhe dokumentet në një aplikacion të vetëm.
+3. **Rrjedha e të dhënave**: përdoruesi fut të dhëna ose ngarkon Excel; sistemi i validon, i transformon, i ruan dhe i shfaq në preview, statistika ose eksport.
+4. **Llogaritja**: pozicioni ndërtohet nga sasia dhe komponentët e kostos; pastaj aplikohen fitimi dhe TVSH-ja për të krijuar çmimin e ofertës.
+5. **Databaza**: `projects` ruan projektet, `categories` klasifikon pozicionet, `project_items` ruan pozicionet, ndërsa `item_expenses` ruan koston e detajuar.
+6. **Siguria**: autentikimi kontrollon hyrjen e përdoruesit, ndërsa RLS kufizon përdorimin e tabelave për përdorues të autentikuar.
+7. **Validimi**: sistemi kontrollon fushat e detyrueshme, formatin e Excel-it, totalet dhe rastet ku të dhënat janë të paplota.
+8. **Vlera praktike**: përdoruesi kursen kohë, ka më pak llogaritje manuale dhe mund të krahasojë ofertën e parashikuar me rezultatin real.
+
+Një përgjigje e mirë gjatë mbrojtjes duhet të shpjegojë jo vetëm “çfarë teknologjie është përdorur”, por edhe “pse është përdorur”. Për shembull, TypeScript është përdorur për të ulur gabimet në strukturën e të dhënave, Supabase për ruajtje dhe autentikim, ndërsa `xlsx` dhe `exceljs` për leximin dhe krijimin e dokumenteve Excel.
+
+Është gjithashtu e rëndësishme të përmenden kufizimet. Qyteti i transportit duhet të ruhet që në momentin e regjistrimit, të dhënat e Excel-it duhet të kenë strukturë të kuptueshme dhe llogaritja e fitimit real kërkon që kostoja reale të plotësohet pas përfundimit të projektit. Pranimi i këtyre kufizimeve e bën vlerësimin akademik më të besueshëm dhe tregon se sistemi është analizuar në mënyrë kritike.
 
 ## 14. Përparësitë e projektit
 

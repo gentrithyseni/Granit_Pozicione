@@ -10,8 +10,11 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <aside className="sidebar card">
         <div>
+          <NavLink to="/" end>
+            <span className="sidebar-brand">🏗️</span>
           <div className="eyebrow accent"> Granit </div>
-          <div className="topbar-title"> Admin panel </div>
+          <div className="topbar-title"> Admin panel </div> 
+          </NavLink>
         </div>
         <nav className="sidebar-nav">
           <NavLink to="/" end>
