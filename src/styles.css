@@ -367,6 +367,205 @@ button:not(:disabled):hover {
   margin-top: 8px;
 }
 
+.libri-summary-panel {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.06), rgba(15, 23, 42, 0.02));
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.libri-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.libri-summary-subtitle {
+  margin: 6px 0 0;
+}
+
+.libri-summary-pill {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(59, 130, 246, 0.12));
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: var(--primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.libri-summary-pill span {
+  font-size: 0.72rem;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.libri-summary-pill strong {
+  font-size: 1.2rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.libri-summary-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.libri-stat-card {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(16, 185, 129, 0.18);
+}
+
+.libri-stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.9), rgba(59, 130, 246, 0.7));
+}
+
+.libri-stat-card.accent {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.08), var(--surface-alt));
+}
+
+.libri-stat-card.highlight {
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), var(--surface-alt));
+}
+
+.libri-summary-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.libri-chart-panel {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px 10px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(16, 185, 129, 0.02));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.libri-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.libri-chart-panel h4,
+.libri-list-header h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.libri-summary-table-wrap {
+  padding: 0;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(15, 23, 42, 0.015));
+  overflow: hidden;
+}
+
+.libri-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.libri-list-header a {
+  color: var(--primary);
+  font-size: 0.8rem;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.libri-summary-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.libri-summary-list li {
+  border-bottom: 1px solid var(--border);
+}
+
+.libri-summary-list li:last-child {
+  border-bottom: 0;
+}
+
+.libri-summary-item-link {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: var(--text);
+  text-decoration: none;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.libri-summary-item-link:hover {
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.libri-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.libri-book-copy {
+  min-width: 0;
+}
+
+.libri-book-name {
+  display: block;
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.libri-book-meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.libri-book-value {
+  justify-self: end;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.93rem;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
 .admin-insights-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

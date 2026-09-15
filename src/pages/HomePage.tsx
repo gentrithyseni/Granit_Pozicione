@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Database, FileUp, WalletCards, TrendingUp, PieChart, ReceiptText, Activity, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { VictoryAxis, VictoryBar, VictoryChart, VictoryContainer, VictoryLabel } from 'victory';
 import { Shell } from '../components/Shell';
 import { StatusBadge } from '../components/StatusBadge';
 import { InsightsCharts } from '../components/InsightsCharts';
@@ -10,7 +11,7 @@ import { fetchCompletedProjects } from '../services/projects';
 import { fetchDashboardStats } from '../services/stats';
 import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue, fetchTransportCityUsage, type CityUsageSummary } from '../services/insights';
 import { ensureDefaultCategories } from '../services/categories';
-import { fetchLibriExportRecords, type LibriExportRecord } from '../services/libriExports';
+import { fetchLibriExportRecords, summarizeLibriExportRecords, type LibriExportRecord } from '../services/libriExports';
 import { buildLibriNdertimorWorkbook, downloadWorkbookBuffer, planLibriExport } from '../lib/libriExport';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import type { DbProject, ProjectSummary, CategorySummary } from '../types/database';
@@ -31,13 +32,17 @@ export function HomePage() {
   const [allProjects, setAllProjects] = useState<DbProject[]>([]);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [recentParamasa, setRecentParamasa] = useState<LibriExportRecord | null>(null);
+  const [libriSummary, setLibriSummary] = useState(() => summarizeLibriExportRecords([]));
   const [recentActionId, setRecentActionId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardStats().then(setStats);
     fetchCompletedProjects().then(setReferences);
     fetchTotalSystemValue().then(setTotalValue);
-    fetchLibriExportRecords().then((records) => setRecentParamasa(records[0] ?? null));
+    fetchLibriExportRecords().then((records) => {
+      setRecentParamasa(records[0] ?? null);
+      setLibriSummary(summarizeLibriExportRecords(records));
+    });
 
     (async () => {
       if (!supabase) return;
@@ -82,6 +87,24 @@ export function HomePage() {
   );
 
   const recentPageCount = recentParamasa ? planLibriExport(recentParamasa.rows).length : 0;
+  const totalLibriValue = libriSummary.totalValue;
+  const libriTopBooks = useMemo(
+    () =>
+      [...libriSummary.byBook]
+        .sort((a, b) => b.totalValue - a.totalValue || b.positionsCount - a.positionsCount)
+        .slice(0, 5),
+    [libriSummary.byBook]
+  );
+  const topBook = libriTopBooks[0] ?? null;
+  const averageBookValue = libriSummary.totalBooks > 0 ? libriSummary.totalValue / libriSummary.totalBooks : 0;
+  const libriChartData = useMemo(
+    () =>
+      libriTopBooks.map((book) => ({
+        x: book.fileName.length > 20 ? `${book.fileName.slice(0, 20)}...` : book.fileName,
+        y: book.totalValue,
+      })),
+    [libriTopBooks]
+  );
 
   const handleDownloadRecent = async () => {
     if (!recentParamasa) return;
@@ -126,6 +149,7 @@ export function HomePage() {
           </div>
         </div>
       </section>
+
 
       <section className="cards-grid">
         <NavLink className="big-card card" to="/register">
@@ -276,6 +300,116 @@ export function HomePage() {
 
         <aside className="home-column-side" />
       </div>
+
+      <section className="panel libri-summary-panel">
+        <div className="libri-summary-header">
+          <div>
+            <h3 className="panel-heading-accent"><FileUp size={17} className="panel-heading-icon" />Statistika Libri Ndërtimor</h3>
+            <p className="muted libri-summary-subtitle">Top libra, vlerë dhe aktivitet i fundit.</p>
+          </div>
+          <div className="libri-summary-pill">
+            <span>Vlera totale</span>
+            <strong>{totalLibriValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</strong>
+          </div>
+        </div>
+
+        <div className="libri-summary-stat-grid">
+          <div className="admin-stat-card libri-stat-card accent">
+            <div className="admin-stat-top">
+              <span className="admin-stat-label">Total libra</span>
+              <CheckCircle2 size={16} className="admin-stat-icon success" />
+            </div>
+            <div className="admin-stat-value">{libriSummary.totalBooks}</div>
+            <p className="muted admin-stat-note">libra të regjistruar</p>
+          </div>
+          <div className="admin-stat-card libri-stat-card highlight">
+            <div className="admin-stat-top">
+              <span className="admin-stat-label">Vlera totale</span>
+              <ReceiptText size={16} className="admin-stat-icon success" />
+            </div>
+            <div className="admin-stat-value">{totalLibriValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</div>
+            <p className="muted admin-stat-note">vlerë e gjithë librit</p>
+          </div>
+          <div className="admin-stat-card libri-stat-card">
+            <div className="admin-stat-top">
+              <span className="admin-stat-label">Vlerë mesatare</span>
+              <TrendingUp size={16} className="admin-stat-icon primary" />
+            </div>
+            <div className="admin-stat-value">{averageBookValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</div>
+            <p className="muted admin-stat-note">për libër</p>
+          </div>
+          <div className="admin-stat-card libri-stat-card">
+            <div className="admin-stat-top">
+              <span className="admin-stat-label">Libri më i vlerësuar</span>
+              <PieChart size={16} className="admin-stat-icon primary" />
+            </div>
+            <div className="admin-stat-value">{topBook ? `${topBook.totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €` : '0 €'}</div>
+            <p className="muted admin-stat-note">{topBook ? topBook.fileName : 'Nuk ka të dhëna'}</p>
+          </div>
+        </div>
+
+        <div className="libri-summary-body">
+          {libriChartData.length > 0 && (
+            <div className="libri-chart-panel">
+              <div className="libri-chart-head">
+                <h4>Top 5 libra</h4>
+                <span className="muted">Vlerë totale</span>
+              </div>
+              <VictoryChart
+                theme={{
+                  axis: { style: { tickLabels: { fontSize: 9, fill: 'var(--muted)' }, axis: { stroke: 'var(--border)' }, grid: { stroke: 'var(--border)' } } },
+                  bar: { style: { data: { fill: '#10b981' } } },
+                }}
+                width={420}
+                height={220}
+                domainPadding={{ x: 18 }}
+                padding={{ top: 18, bottom: 52, left: 52, right: 14 }}
+                containerComponent={<VictoryContainer responsive={false} />}
+              >
+                <VictoryAxis
+                  tickFormat={(value: string) => value}
+                  style={{ tickLabels: { fontSize: 8 } }}
+                />
+                <VictoryAxis
+                  dependentAxis
+                  tickFormat={(value: number) => `${(value / 1000).toFixed(value >= 1000 ? 0 : 1)}k€`}
+                  style={{ tickLabels: { fontSize: 9, fill: 'var(--muted)' }, grid: { stroke: 'var(--border)' } }}
+                />
+                <VictoryBar
+                  data={libriChartData}
+                  labels={({ datum }: { datum: { y: number } }) => `${datum.y.toLocaleString('sq-AL', { maximumFractionDigits: 0 })}€`}
+                  labelComponent={<VictoryLabel dy={-8} style={{ fontSize: 9, fill: '#10b981', fontWeight: 700 }} />}
+                />
+              </VictoryChart>
+            </div>
+          )}
+
+          <div className="libri-summary-table-wrap">
+            <div className="libri-list-header">
+              <h4>Libra</h4>
+              <NavLink to="/import">Shiko të gjithë</NavLink>
+            </div>
+            <ul className="libri-summary-list">
+              {libriTopBooks.length > 0 ? (
+                libriTopBooks.map((book, index) => (
+                  <li key={book.id} className="libri-summary-item-row">
+                    <NavLink to="/import" className="libri-summary-item-link">
+                      <span className="libri-rank">#{index + 1}</span>
+                      <span className="libri-book-copy">
+                        <span className="libri-book-name">{book.fileName}</span>
+                        <span className="libri-book-meta">{book.pagesCount} faqe • {book.positionsCount} pozicione</span>
+                      </span>
+                      <span className="libri-book-value">{book.totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</span>
+                    </NavLink>
+                  </li>
+                ))
+              ) : (
+                <li className="muted">Nuk ka libra të regjistruar ende.</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      </section>
 
       <section className="panel home-admin-section">
         <h3 className="panel-heading-accent">
