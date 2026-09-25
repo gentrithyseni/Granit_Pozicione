@@ -12,7 +12,7 @@ import { fetchDashboardStats } from '../services/stats';
 import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue, fetchTransportCityUsage, type CityUsageSummary } from '../services/insights';
 import { ensureDefaultCategories } from '../services/categories';
 import { fetchLibriExportRecords, summarizeLibriExportRecords, type LibriExportRecord } from '../services/libriExports';
-import { buildLibriNdertimorWorkbook, downloadWorkbookBuffer, planLibriExport } from '../lib/libriExport';
+import { planLibriExport } from '../lib/libriExportPlan';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import type { DbProject, ProjectSummary, CategorySummary } from '../types/database';
 
@@ -110,6 +110,7 @@ export function HomePage() {
     if (!recentParamasa) return;
     setRecentActionId(recentParamasa.id);
     try {
+      const { buildLibriNdertimorWorkbook, downloadWorkbookBuffer } = await import('../lib/libriExport');
       const buffer = await buildLibriNdertimorWorkbook(recentParamasa.rows, recentParamasa.meta);
       const safeName = (recentParamasa.fileName || 'Paramasa').replace(/\.[^/.]+$/, '').replace(/\s+/g, ' ').trim() || 'Paramasa';
       downloadWorkbookBuffer(buffer, `${safeName}-Libri-Ndertimor.xlsx`);
@@ -186,8 +187,9 @@ export function HomePage() {
         </NavLink>
       </section>
 
-      {recentParamasa && (
-        <section className="panel recent-paramasa-card">
+      <section className="panel recent-paramasa-card">
+        {recentParamasa ? (
+          <>
           <div className="recent-paramasa-head">
             <div>
               <h3>Paramasa e fundit</h3>
@@ -204,8 +206,14 @@ export function HomePage() {
             </button>
             <NavLink className="card" to="/import">Hape</NavLink>
           </div>
-        </section>
-      )}
+          </>
+        ) : (
+          <>
+            <h3>Paramasa e fundit</h3>
+            <p className="muted">Nuk ka paramasë të shkarkuar ende.</p>
+          </>
+        )}
+      </section>
 
       <div className="home-columns">
         <div className="home-column-main">
@@ -289,13 +297,16 @@ export function HomePage() {
             )}
           </section>
 
-          {(projectSummaries.length > 0 || categorySummaries.length > 0) && (
-            <section className="panel">
-              <h3 className="panel-heading-accent"><TrendingUp size={17} className="panel-heading-icon" />Statistika</h3>
-              <p className="muted">Vlera sipas projektit dhe shpërndarja e pozicioneve sipas kategorisë.</p>
+          <section className="panel home-insights-panel">
+            <h3 className="panel-heading-accent"><TrendingUp size={17} className="panel-heading-icon" />Statistika</h3>
+            <p className="muted">Vlera sipas projektit dhe shpërndarja e pozicioneve sipas kategorisë.</p>
+            {projectSummaries.length > 0 || categorySummaries.length > 0 ? (
               <InsightsCharts projectSummaries={projectSummaries} categorySummaries={categorySummaries} cityUsage={cityUsage} />
-            </section>
-          )}
+            ) : (
+              <p className="muted chart-empty">Duke ngarkuar statistikat…</p>
+            )}
+          </section>
+
         </div>
 
         <aside className="home-column-side" />
@@ -364,7 +375,7 @@ export function HomePage() {
                 height={220}
                 domainPadding={{ x: 18 }}
                 padding={{ top: 18, bottom: 52, left: 52, right: 14 }}
-                containerComponent={<VictoryContainer responsive={false} />}
+                containerComponent={<VictoryContainer responsive={false} title="Top 5 libra sipas vlerës" desc="Grafik me vlerën totale të 5 librave më të mëdhenj." />}
               >
                 <VictoryAxis
                   tickFormat={(value: string) => value}

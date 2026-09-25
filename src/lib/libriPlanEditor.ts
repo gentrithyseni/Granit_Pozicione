@@ -1,6 +1,6 @@
 import type { ParsedRow } from './excel';
 import { packSectionIntoPages } from './libriPaging';
-import type { LibriExportPlanPage } from './libriExport';
+import type { LibriExportPlanPage } from './libriExportPlan';
 
 const MAX_POSITIONS_PER_PAGE = 5;
 

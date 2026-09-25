@@ -10,8 +10,20 @@ import ExcelJS from 'exceljs';
 import JSZip from 'jszip';
 import type { ParsedRow } from './excel';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
-import { groupRowsBySection } from './paramasaPreview';
-import { packSectionIntoPages, TEMPLATE_SLOTS, type TemplateId, type LibriPage } from './libriPaging';
+import { TEMPLATE_SLOTS, type TemplateId } from './libriPaging';
+import {
+  buildLibriExportPositions,
+  extractSectionAccountNumber,
+  planLibriExport,
+  type LibriExportPlanPage,
+} from './libriExportPlan';
+
+export {
+  buildLibriExportPositions,
+  extractSectionAccountNumber,
+  planLibriExport,
+  type LibriExportPlanPage,
+} from './libriExportPlan';
 
 const TEMPLATE_FILES: Record<TemplateId, string> = {
   1: 'Shablloni-1-Faqe.xlsx',
@@ -42,36 +54,6 @@ const FIXED_CELLS = {
   unit: { row: 13, col: 6 }, // F13
 };
 
-const ROMAN_NUMERALS: Array<[number, string]> = [
-  [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
-  [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
-];
-
-function toRomanNumeral(num: number): string {
-  let remaining = num;
-  let result = '';
-  for (const [value, symbol] of ROMAN_NUMERALS) {
-    while (remaining >= value) {
-      result += symbol;
-      remaining -= value;
-    }
-  }
-  return result || String(num);
-}
-
-/** "Llogaria me ofertë" duhet të jetë VETËM numri romak i seksionit (p.sh. "II"), kurrë teksti
- * i plotë i titullit (p.sh. jo "2.PUNIMET E DHEUT..." i tërë). E nxjerr rrënjën numerike nga
- * sectionLabel (qoftë arab "2.Titulli..." ose tashmë romak "II Titulli...") dhe e kthen
- * gjithmonë në numër romak për shfaqje. */
-export function extractSectionAccountNumber(sectionLabel: string): string {
-  const trimmed = sectionLabel.trim();
-  const romanMatch = /^([IVXLCDM]+)\b/i.exec(trimmed);
-  if (romanMatch) return romanMatch[1].toUpperCase();
-  const arabicMatch = /^(\d+)/.exec(trimmed);
-  if (arabicMatch) return toRomanNumeral(Number(arabicMatch[1]));
-  return trimmed;
-}
-
 function sanitizeSheetName(name: string): string {
   const cleaned = name.replace(/[*?:/\\[\]]/g, ' ').trim();
   return (cleaned || 'Faqja').slice(0, 31);
@@ -79,29 +61,17 @@ function sanitizeSheetName(name: string): string {
 
 async function loadTemplateWorkbook(templateId: TemplateId): Promise<ExcelJS.Workbook> {
   const url = TEMPLATE_URLS[templateId];
-  const fileName = TEMPLATE_FILES[templateId];
 
-  if (typeof window !== 'undefined' || typeof document !== 'undefined') {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Nuk u gjet shablloni në ${url}`);
-    const buffer = await response.arrayBuffer();
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
-    return workbook;
+  // Leximi i shabllonit Excel direkt përmes fetch nga dosja public/
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Nuk u gjet shablloni në ${url}`);
   }
 
-  try {
-    const fs = await import('node:fs/promises');
-    const path = await import('node:path');
-    const filePath = path.resolve(process.cwd(), 'public', 'templates', fileName);
-    const buffer = await fs.readFile(filePath);
-    const workbook = new ExcelJS.Workbook();
-    const arrayBuffer = buffer instanceof Uint8Array ? buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) : buffer;
-    await workbook.xlsx.load(arrayBuffer);
-    return workbook;
-  } catch (error) {
-    throw new Error(`Nuk u gjet shablloni në ${url} ose ${fileName}: ${error instanceof Error ? error.message : String(error)}`);
-  }
+  const buffer = await response.arrayBuffer();
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  return workbook;
 }
 
 /** Klonon një fletë burimore (me stile, bashkime qelizash, gjerësi/lartësi) brenda workbook-ut të destinacionit. */
@@ -156,74 +126,6 @@ function setCell(ws: ExcelJS.Worksheet, row: number, col: number, value: string 
   const style = cell.style ? JSON.parse(JSON.stringify(cell.style)) as ExcelJS.Style : undefined;
   cell.value = value;
   if (style) cell.style = style;
-}
-
-type LibriExportPosition = {
-  positionNumber: string;
-  description: string;
-  unit: string;
-  lines: Array<{ label: string; value: number }>;
-  total: number;
-};
-
-/** Konverton rreshtat e importuar (nga paramasa tabelore ose nga vetë Libri Ndërtimor) në pozicione gati për eksport. */
-export function buildLibriExportPositions(rows: ParsedRow[]): LibriExportPosition[] {
-  return rows.map((row) => {
-    if (row.source === 'libri' && row.measurements && row.measurements.length > 0) {
-      return {
-        positionNumber: row.position_number,
-        description: row.description,
-        unit: row.unit,
-        lines: row.measurements.map((m) => ({ label: m.raw, value: m.a })),
-        total: row.quantity,
-      };
-    }
-
-    const qty = Number(row.quantity || 0);
-    const unitPrice = Number(row.unit_price || 0);
-    const lineTotal = Number(row.total_price || 0) || qty * unitPrice;
-    // Kolonat F (Mujore-Monthly) dhe H (Gjithsejtë) në shabllonin real mbajnë SASINË,
-    // jo shumën monetare — e njëjta semantikë si matjet "A x B = C" te Libri Ndërtimor.
-    return {
-      positionNumber: row.position_number,
-      description: row.description,
-      unit: row.unit,
-      lines: [{ label: `${qty.toFixed(2)} x ${unitPrice.toFixed(2)}  = ${lineTotal.toFixed(2)}`, value: qty }],
-      total: qty,
-    };
-  });
-}
-
-export type LibriExportPlanPage = {
-  templateId: TemplateId;
-  sectionKey: string;
-  sectionLabel: string;
-  rows: ParsedRow[];
-  overflowWarning: boolean;
-  mixedUnitsWarning: boolean;
-};
-
-/** Planifikimi (pa gjeneruar akoma xlsx) — i dobishëm për ta shfaqur në UI para shkarkimit.
- * `sectionTitleOverrides` (opsional): titujt e seksioneve të redaktuar dorazi nga përdoruesi
- * te "Paneli i Validimit", çelësi është `section.sectionKey`. */
-export function planLibriExport(rows: ParsedRow[], sectionTitleOverrides?: Record<string, string>): LibriExportPlanPage[] {
-  const sections = groupRowsBySection(rows);
-  const plan: LibriExportPlanPage[] = [];
-  sections.forEach((section) => {
-    const pages: LibriPage[] = packSectionIntoPages(section.rows);
-    const label = sectionTitleOverrides?.[section.sectionKey] || section.sectionLabel;
-    pages.forEach((page) => {
-      plan.push({
-        templateId: page.templateId,
-        sectionKey: section.sectionKey,
-        sectionLabel: label,
-        rows: page.rows,
-        overflowWarning: page.overflowWarning,
-        mixedUnitsWarning: page.mixedUnitsWarning,
-      });
-    });
-  });
-  return plan;
 }
 
 /**

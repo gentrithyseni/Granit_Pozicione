@@ -11,38 +11,38 @@ export function Shell({ children }: { children: ReactNode }) {
       <aside className="sidebar card">
         <div>
           <NavLink to="/" end>
-            <span className="sidebar-brand">🏗️</span>
+            <span className="sidebar-brand" aria-hidden="true">🏗️</span>
           <div className="eyebrow accent"> Granit </div>
           <div className="topbar-title"> Admin panel </div> 
           </NavLink>
         </div>
         <nav className="sidebar-nav">
           <NavLink to="/" end>
-            <span className="sidebar-nav-icon">🏠</span>
+            <span className="sidebar-nav-icon" aria-hidden="true">🏠</span>
             <span className="sidebar-nav-text"> Faqja Kryesore </span>
           </NavLink>
           <NavLink to="/register">
-            <span className="sidebar-nav-icon">📝</span>
+            <span className="sidebar-nav-icon" aria-hidden="true">📝</span>
             <span className="sidebar-nav-text"> Regjistro </span>
           </NavLink>
           <NavLink to="/fature">
-            <span className="sidebar-nav-icon">🧾</span>
+            <span className="sidebar-nav-icon" aria-hidden="true">🧾</span>
             <span className="sidebar-nav-text"> Krijo Fature </span>
           </NavLink>
           <NavLink to="/import">
-            <span className="sidebar-nav-icon">📊</span>
+            <span className="sidebar-nav-icon" aria-hidden="true">📊</span>
             <span className="sidebar-nav-text"> Krijo Libër Ndërtimor </span>
           </NavLink>
           <NavLink to="/data">
-            <span className="sidebar-nav-icon">💾</span>
+            <span className="sidebar-nav-icon" aria-hidden="true">💾</span>
             <span className="sidebar-nav-text"> Të Dhënat </span>
           </NavLink>
           <NavLink to="/search">
-            <span className="sidebar-nav-icon">🔍</span>
+            <span className="sidebar-nav-icon" aria-hidden="true">🔍</span>
             <span className="sidebar-nav-text"> Kërko </span>
           </NavLink>
           <NavLink to="/profile">
-            <span className="sidebar-nav-icon">👤</span>
+            <span className="sidebar-nav-icon" aria-hidden="true">👤</span>
             <span className="sidebar-nav-text"> Profili </span>
           </NavLink>
         </nav>

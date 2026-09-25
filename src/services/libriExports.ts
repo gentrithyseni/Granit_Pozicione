@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { ParsedRow } from '../lib/excel';
-import { planLibriExport } from '../lib/libriExport';
+import { planLibriExport } from '../lib/libriExportPlan';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 import type { DbLibriExport } from '../types/database';
 

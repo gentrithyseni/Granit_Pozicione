@@ -71,7 +71,7 @@ export function InsightsCharts({ projectSummaries, categorySummaries, cityUsage 
               height={250}
               domainPadding={{ x: 18 }}
               padding={{ top: 24, bottom: 64, left: 54, right: 12 }}
-              containerComponent={<VictoryContainer responsive={false} />}
+              containerComponent={<VictoryContainer responsive={false} title="Vlera sipas projektit" desc="Grafik i vlerës totale për secilin projekt." />}
             >
               <VictoryAxis
                 tickFormat={(t: string) => truncate(t, 10)}
@@ -110,7 +110,7 @@ export function InsightsCharts({ projectSummaries, categorySummaries, cityUsage 
               height={250}
               domainPadding={{ x: 16 }}
               padding={{ top: 24, bottom: 64, left: 54, right: 12 }}
-              containerComponent={<VictoryContainer responsive={false} />}
+              containerComponent={<VictoryContainer responsive={false} title="Vlera sipas kategorisë" desc="Grafik i vlerës totale për secilën kategori." />}
             >
               <VictoryAxis
                 tickFormat={(t: string) => truncate(t, 10)}
@@ -152,7 +152,7 @@ export function InsightsCharts({ projectSummaries, categorySummaries, cityUsage 
               colorScale={categoryColors}
               data={sortedCategories.map((c) => ({ x: '', y: c.count }))}
               labels={() => ''}
-              containerComponent={<VictoryContainer responsive={false} />}
+              containerComponent={<VictoryContainer responsive={false} title="Pozicione sipas kategorisë" desc="Grafik i numrit të pozicioneve për kategori." />}
             />
             <div className="chart-legend-list">
               {sortedCategories.map((c, i) => (

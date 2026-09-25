@@ -8,12 +8,13 @@ import { PROJECT_STATUSES } from '../constants/projectStatus';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabase';
 import { exportProjectCSV } from '../services/export';
-import { fetchCategorySummaries } from '../services/insights';
 import { ensureDefaultCategories, groupItemsByProject, deleteCategory } from '../services/categories';
 import { updateProject, deleteProject, deletePosition } from '../services/projects';
 import { recordPriceSnapshot } from '../services/priceHistory';
 import { PriceHistoryDashboard } from '../components/PriceHistoryDashboard';
+import { RevenueTrendChart } from '../components/RevenueTrendChart';
 import type { CategorySummary, DbCategory, DbProject, DbProjectItem, ItemWithMeta } from '../types/database';
+import { fetchCategorySummaries, fetchMonthlyRevenueTrend, type MonthlyRevenuePoint } from '../services/insights';
 
 const ITEM_SELECT = '*, projects(name), categories(name)';
 
@@ -57,6 +58,7 @@ export function DataPage() {
   const [metaActualCost, setMetaActualCost] = useState('');
   const [metaActualNotes, setMetaActualNotes] = useState('');
   const [projectAnalysis, setProjectAnalysis] = useState<string[] | null>(null);
+  const [monthlyRevenueTrend, setMonthlyRevenueTrend] = useState<MonthlyRevenuePoint[]>([]);
 
   const reloadProjects = async () => {
     if (!supabase) return;
@@ -66,6 +68,7 @@ export function DataPage() {
     setProjectsList(list);
     setCategoriesList(cats);
     setCategorySummaries(await fetchCategorySummaries(cats));
+    setMonthlyRevenueTrend(await fetchMonthlyRevenueTrend());
   };
 
   const loadComparePool = async (categoryId?: string) => {
@@ -481,6 +484,12 @@ export function DataPage() {
       </div>
 
       <PriceHistoryDashboard categories={categoriesList} />
+
+      <section className="panel panel-top-gap revenue-trend-panel">
+        <h3 className="panel-heading-accent">Trendi mujor i ofertave</h3>
+        <p className="muted">Vlera e ofertuar sipas muajit, bazuar në datën e regjistrimit të pozicioneve.</p>
+        <RevenueTrendChart points={monthlyRevenueTrend} />
+      </section>
 
       {selectedProject && (
         <section className="panel panel-top-gap">

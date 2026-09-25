@@ -465,12 +465,6 @@ Këta komponentë kanë përgjegjësi relativisht të qarta dhe nuk kërkojnë n
 - `validateKontrate` - validon faturën sipas kontratës.
 - `validatePozicione` - validon fletë-dërgesën.
 
-### `src/lib/paramasaExport.ts`
-
-- `escapeHtml` - mbron tekstin kur futet në HTML.
-- `renderPage` - renderon një faqe paramase në HTML.
-- `buildParamasaFinalHtml` - ndërton HTML-in final të paramasës.
-
 ### `src/lib/pricing.test.ts`
 
 - Teston `calculatePositionPrice`, grupimin, paketimin e faqeve dhe eksportin real të Librit.
