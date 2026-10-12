@@ -2,21 +2,18 @@ import { Navigate, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { hasSupabaseConfig } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { LoadingScreen } from './LoadingScreen';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, profileLoading } = useAuth();
   const location = useLocation();
 
   if (!hasSupabaseConfig) {
     return <>{children}</>;
   }
 
-  if (loading) {
-    return (
-      <div className="auth-loading">
-        <p className="muted">Duke u ngarkuar...</p>
-      </div>
-    );
+  if (loading || profileLoading) {
+    return <LoadingScreen title="Duke kontrolluar qasjen" subtitle="Po verifikohet profili..." />;
   }
 
   if (!user) {

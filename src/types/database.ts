@@ -11,6 +11,23 @@ export type DbProject = {
   actual_notes?: string | null;
 };
 
+export type UserApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+export type UserRole = 'admin' | 'family_member' | 'viewer';
+
+export type DbProfile = {
+  id: string;
+  email: string;
+  full_name?: string | null;
+  phone?: string | null;
+  role: UserRole;
+  status: UserApprovalStatus;
+  created_at?: string;
+  approved_at?: string | null;
+  approved_by?: string | null;
+  rejection_reason?: string | null;
+  approval_notice_seen_at?: string | null;
+};
+
 export type DbCategory = {
   id: string;
   name: string;

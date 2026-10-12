@@ -5,9 +5,10 @@ import { MoonStar, SunMedium } from 'lucide-react';
 import { hasSupabaseConfig } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
+import { useToast } from '../context/ToastContext';
 
 type AuthMode = 'login' | 'register' | 'forgot' | 'updatePassword';
-type AuthValues = { email: string; password: string; confirmPassword: string };
+type AuthValues = { fullName: string; email: string; password: string; confirmPassword: string };
 
 const modeCopy: Record<AuthMode, { title: string; description: string; submit: string; loading: string }> = {
   login: {
@@ -37,17 +38,20 @@ const modeCopy: Record<AuthMode, { title: string; description: string; submit: s
 };
 
 export function LoginPage() {
-  const { user, recoveryMode, signIn, signUp, resetPassword, updatePassword } = useAuth();
+  const { user, profile, profileLoading, recoveryMode, signIn, signUp, resetPassword, updatePassword } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [mode, setMode] = useState<AuthMode>(recoveryMode ? 'updatePassword' : 'login');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { register, handleSubmit, reset } = useForm<AuthValues>({
-    defaultValues: { email: '', password: '', confirmPassword: '' },
+  const [loginBlocked, setLoginBlocked] = useState(false);
+  const { register, handleSubmit, reset, watch } = useForm<AuthValues>({
+    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '' },
   });
+  const currentEmail = watch('email');
 
   const from = (location.state as { from?: string } | null)?.from || '/';
   const copy = modeCopy[mode];
@@ -56,7 +60,13 @@ export function LoginPage() {
     if (recoveryMode) setMode('updatePassword');
   }, [recoveryMode]);
 
-  if (user && !recoveryMode) return <Navigate to={from} replace />;
+  useEffect(() => {
+    setLoginBlocked(false);
+  }, [currentEmail]);
+
+  if (user && !profileLoading && profile?.status === 'approved' && !recoveryMode) {
+    return <Navigate to={from} replace />;
+  }
 
   if (!hasSupabaseConfig) {
     return (
@@ -77,9 +87,10 @@ export function LoginPage() {
 
   const changeMode = (nextMode: AuthMode) => {
     setMode(nextMode);
+    setLoginBlocked(false);
     setError(null);
     setMessage(null);
-    reset({ email: '', password: '', confirmPassword: '' });
+    reset({ fullName: '', email: '', password: '', confirmPassword: '' });
   };
 
   const onSubmit = async (values: AuthValues) => {
@@ -94,27 +105,33 @@ export function LoginPage() {
     }
 
     if (mode === 'login') {
-      const { error: signInError } = await signIn(values.email, values.password);
+      const { error: signInError, status, approvalNotice, blocked } = await signIn(values.email, values.password);
       setLoading(false);
+      setLoginBlocked(Boolean(blocked));
       if (signInError) {
         setError(signInError);
         return;
       }
+      if (status === 'approved' && approvalNotice) showToast('Llogaria jote është aprovuar me sukses.', 'success');
       navigate(from, { replace: true });
       return;
     }
 
     if (mode === 'register') {
-      const { error: signUpError, needsConfirmation } = await signUp(values.email, values.password);
+      const { error: signUpError, needsConfirmation, needsApproval } = await signUp(values.email, values.password, values.fullName);
       setLoading(false);
       if (signUpError) {
         setError(signUpError);
         return;
       }
-      if (needsConfirmation) {
-        setMessage('Regjistrimi perfundoi. Kontrollo email-in per konfirmim, pastaj hyr ne webfaqe.');
+      if (needsConfirmation || needsApproval) {
+        setMessage(
+          needsConfirmation
+            ? 'Aplikimi u dërgua. Kontrollo email-in dhe prit aprovimin nga administratori.'
+            : 'Aplikimi u dërgua. Prit aprovimin nga administratori para se të hysh.'
+        );
         setMode('login');
-        reset({ email: values.email, password: '', confirmPassword: '' });
+        reset({ fullName: '', email: values.email, password: '', confirmPassword: '' });
         return;
       }
       navigate(from, { replace: true });
@@ -130,7 +147,7 @@ export function LoginPage() {
         return;
       }
       setMessage('Linku per ndryshim password-i u dergua. Kontrollo email-in.');
-      reset({ email: values.email, password: '', confirmPassword: '' });
+      reset({ fullName: '', email: values.email, password: '', confirmPassword: '' });
       return;
     }
 
@@ -168,6 +185,13 @@ export function LoginPage() {
         )}
 
         <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
+          {mode === 'register' && (
+            <label>
+              Emri i plotë
+              <input type="text" autoComplete="name" {...register('fullName', { required: true })} placeholder="Emri dhe mbiemri" />
+            </label>
+          )}
+
           {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
             <label>
               Email
@@ -202,8 +226,8 @@ export function LoginPage() {
           {error && <p className="auth-error" role="alert">{error}</p>}
           {message && <p className="auth-success" role="status">{message}</p>}
 
-          <button className="primary-button" type="submit" disabled={loading}>
-            {loading ? copy.loading : copy.submit}
+          <button className="primary-button" type="submit" disabled={loading || (mode === 'login' && loginBlocked)}>
+            {loading ? copy.loading : loginBlocked ? 'Login i bllokuar për sot' : copy.submit}
           </button>
         </form>
 

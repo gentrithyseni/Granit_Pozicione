@@ -7,6 +7,15 @@ type Group = {
   subtotal: number;
 };
 
+const euroFormatter = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatEuro(value: number): string {
+  return `${euroFormatter.format(Number.isFinite(value) ? value : 0)} €`;
+}
+
 export function CategoryProjectCompare({ groups, categoryName }: { groups: Group[]; categoryName: string }) {
   if (groups.length < 2) return null;
 
@@ -22,26 +31,24 @@ export function CategoryProjectCompare({ groups, categoryName }: { groups: Group
           <tr className="import-table-head-row">
             <th>Projekti</th>
             <th>Pozicione</th>
-            <th>Çmimi / njësia</th>
+            <th>Çmimi mesatar / njësi</th>
             <th>Totali kategorie</th>
             <th>Dallimi</th>
           </tr>
         </thead>
         <tbody>
           {sorted.map((group) => {
-            const avgUnit =
-              group.items.length > 0
-                ? group.items.reduce((s, i) => s + Number(i.unit_price), 0) / group.items.length
-                : 0;
+            const totalQuantity = group.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
+            const avgUnit = totalQuantity > 0 ? group.subtotal / totalQuantity : 0;
             const diff = group.subtotal - reference;
             return (
               <tr key={group.projectId} className="import-table-body-row">
                 <td className="import-table-cell"><strong>{group.projectName}</strong></td>
                 <td>{group.items.length}</td>
-                <td>{avgUnit.toFixed(2)} €</td>
-                <td className="col-bold">{group.subtotal.toLocaleString('de-DE')} €</td>
+                <td>{formatEuro(avgUnit)}</td>
+                <td className="col-bold">{formatEuro(group.subtotal)}</td>
                 <td className={diff === 0 ? 'diff-neutral' : diff > 0 ? 'diff-up' : 'diff-down'}>
-                  {diff === 0 ? 'më i larti' : `${diff > 0 ? '+' : ''}${diff.toLocaleString('de-DE')} €`}
+                  {diff === 0 ? 'Referencë (më i larti)' : `${diff > 0 ? '+' : ''}${formatEuro(diff)}`}
                 </td>
               </tr>
             );

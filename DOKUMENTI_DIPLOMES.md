@@ -19,7 +19,7 @@ Ky projekt paraqet zhvillimin e një sistemi web për vlerësimin e ofertave dhe
 
 Aplikacioni mundëson regjistrim manual të pozicioneve, import të të dhënave nga Excel, llogaritje dhe vlerësim të ofertave, gjenerim të dokumenteve, krahasim të projekteve dhe kategorive, kërkim global në të dhëna, si dhe menaxhim të llogarisë së përdoruesit. Për realizimin e projektit janë përdorur React, TypeScript, Vite, Supabase dhe biblioteka të tjera ndihmëse për forma, eksportim dhe vizualizim të të dhënave.
 
-Ky dokument është hartuar duke u bazuar në kodin dhe skedarët ekzistues të repository-t, përfshirë [App.tsx](App.tsx), faqet në [src/pages](src/pages), shërbimet në [src/services](src/services), skemën e databazës në [database-schema.sql](database-schema.sql), si dhe materialet shembull në folderët [Fatura](Fatura) dhe [Paramasa](Paramasa).
+Ky dokument është hartuar duke u bazuar në kodin dhe skedarët ekzistues të repository-t, përfshirë [App.tsx](App.tsx), faqet në [src/pages](src/pages), shërbimet në [src/services](src/services), tipet dhe migration-in e sigurisë në [src/types/database.ts](src/types/database.ts) dhe [supabase/user-approval.sql](supabase/user-approval.sql), si dhe materialet shembull në folderët [Fatura](Fatura) dhe [Paramasa](Paramasa).
 
 ## Fjalë kyçe
 
@@ -105,7 +105,7 @@ Supabase është përdorur si backend për:
 - politika RLS,
 - ruajtje dhe lexim të të dhënave.
 
-Në skemën e databazës janë të përfshira tabelat kryesore `categories`, `projects`, `project_items`, `item_expenses` dhe `import_history`, që përputhen me rrjedhën reale të aplikacionit.
+Në databazë përdoren tabelat kryesore `categories`, `projects`, `project_items`, `item_expenses`, `price_history`, `libri_exports` dhe `profiles`. Tabela `import_history` ekziston si strukturë legacy, por aktualisht nuk përdoret nga rrjedha e aplikacionit.
 
 ### 6.6 Biblioteka ndihmëse
 
@@ -131,11 +131,11 @@ Kjo ndarje e bën projektin më të mirëmbajtshëm dhe më të kuptueshëm, duk
 
 Për ta bërë dokumentin më të plotë vizualisht, projekti mund të paraqitet edhe me një figurë të thjeshtë statistikore që e përmbledh strukturën reale të repository-t:
 
-- 7 faqe kryesore,
-- 13 komponentë të përbashkët,
-- 9 shërbime biznesi,
-- 9 modulë / utilitarë në lib,
-- 5 tabela kryesore në databazë.
+- faqe për dashboard, regjistrim, faturë, import, të dhëna, kërkim, profil dhe About Us,
+- komponentë të përbashkët për shell, autentikim, loading, preview, statistika dhe administrim,
+- shërbime biznesi për projekte, kategori, Libra Ndërtimor, statistika, kërkim dhe eksport,
+- module në `src/lib` për validim, kalkulim, paging, preview dhe eksport,
+- tabela operative për projekte, kategori, pozicione, shpenzime, historik çmimesh, Libra dhe profile.
 
 Kjo figurë tregon se projekti është i ndarë mirë në shtresa dhe module, gjë që është shumë e rëndësishme për mirëmbajtje dhe zgjerim të mëtejshëm.
 
@@ -239,7 +239,7 @@ Ky dallim lejon që sistemi të krahasojë parashikimin me realitetin. Nëse kos
 
 ### 8.1 Ballina / Dashboard
 
-Faqja kryesore paraqet gjendjen e përgjithshme të sistemit me statistika, projekte referencë dhe grafikë analitike.
+Faqja kryesore paraqet gjendjen e përgjithshme të sistemit me statistika, projekte referencë, grafikë analitike, gjendje sipas statusit dhe përmbledhje të Librave Ndërtimor sipas vlerës, faqeve dhe pozicioneve.
 
 ### 8.2 Regjistrimi i pozicioneve
 
@@ -281,7 +281,7 @@ Faqja e të dhënave ofron editim, fshirje, krahasim projektesh, krahasim katego
 
 ### 8.8 Autentikimi dhe profili
 
-Përdoruesi mund të hyjë, të regjistrohet, të ndryshojë password-in dhe të shkarkojë backup JSON.
+Përdoruesi mund të hyjë, të aplikojë për llogari, të ndryshojë password-in dhe të shkarkojë backup JSON. Llogaritë e reja marrin statusin `pending`; vetëm administratori mund t’i aprovojë, refuzojë ose pezullojë. Profili i administratorit përmban statistika dhe menaxhim të aplikimeve.
 
 ## 9. Të dhënat që përdoren në projekt
 
@@ -291,7 +291,7 @@ Sistemi punon me këto entitete kryesore:
 - **Kategoritë**: emri dhe përshkrimi.
 - **Pozicionet e projektit**: numri i pozicionit, përshkrimi, njësia, sasia, çmimi, totali.
 - **Shpenzimet e detajuara**: material, punë, ushqim, transport dhe të tjera, të ruajtura veçmas në tabelën `item_expenses`.
-- **Historiku i importeve**: skedarët e importuar dhe gjendja e undo, të ruajtura në `import_history`.
+- **Historiku i importeve**: `import_history` është tabelë legacy dhe nuk përdoret aktualisht; historiku aktiv i Librave ruhet në `libri_exports`.
 - **Historiku i çmimeve**: snapshot-e të çmimeve dhe fitimit.
 - **Eksportet e Librit Ndërtimor**: metadata, rreshta dhe statistika të eksportit.
 - **Të dhëna të faturave**: klienti, data, fushat financiare dhe përmbajtja e faturës.
@@ -330,7 +330,7 @@ Lejon kërkim të shpejtë në të gjitha pozicionet dhe projektet.
 
 ### 10.7 Faqja e profilit
 
-Për menaxhimin e llogarisë dhe backup-it.
+Për menaxhimin e llogarisë, ndryshimin e password-it, backup-it, daljes nga sesioni dhe administrimit të përdoruesve. Paneli shfaq statusin e llogarisë, rolin, kohën e hyrjes së fundit dhe timeout-in e sesionit.
 
 Përveç ndryshimit të password-it, funksioni i backup-it JSON ruan `projects`, `categories`, `project_items` dhe `item_expenses`, sipas implementimit real të shërbimit të eksportit.
 
@@ -414,6 +414,36 @@ Kufizimet aktuale përfshijnë varësinë nga konfigurimi i Supabase dhe faktin 
 - integrim me module financiare,
 - eksport më të pasur për dokumentacion zyrtar.
 
+## 15.1 Përditësimet e implementuara deri më 12.10.2026
+
+Pas versionit fillestar, sistemi është zgjeruar me këto funksione dhe përmirësime:
+
+- **Libri Ndërtimor**: dashboard me numrin e librave, vlerën totale, vlerën mesatare, librin me vlerë më të madhe dhe listën Top 5 sipas vlerës.
+- **Metrikat e librave**: çdo libër shfaq faqet, pozicionet dhe vlerën totale; historiku i ruajtur përdor pagination me pesë libra për faqe.
+- **Cache në memory**: kategoritë cache-ohen për pesë minuta dhe eksportet e Librave për dy minuta; cache invalidizohet pas ruajtjes ose fshirjes.
+- **Autentikim me aprovim**: regjistrimi krijon profil `pending`; administratori mund ta aprovojë, refuzojë ose pezullojë përdoruesin.
+- **Panel administrimi**: profili i adminit shfaq numrin total të profileve, aplikimet në pritje, të aprovuarit dhe të refuzuarit, së bashku me datën dhe orën e aplikimit.
+- **Njoftim njëherësh në aplikacion**: pas aprovimit shfaqet vetëm një herë mesazhi i suksesit, i ruajtur me `approval_notice_seen_at` në databazë; nuk përdoren email-e të dyta për approve/reject.
+- **Kufizim login-i**: pas pesë tentativave të pasuksesshme brenda ditës, login-i bllokohet për atë email në browser; Supabase mbetet autoriteti server-side për rate limiting.
+- **Sesioni**: pas 60 minutash pa aktivitet bëhet sign-out automatik; token refresh-i i Supabase nuk rinis më verifikimin e profilit pas Alt+Tab.
+- **UX dhe responsive**: loading screen premium me logo, glassmorphism, ring animimi dhe progress shimmer; është shtuar edhe faqe 404, About Us si route e veçantë, PWA manifest dhe logo reale.
+- **Profil dhe navigim**: logout-i është bërë veprim kryesor, theme/logout janë vendosur në një rresht në sidebar, ndërsa profili ka përmbledhje të statusit, rolit dhe timeout-it.
+
+## 15.2 Vlerësimi i sigurisë dhe kufizimet
+
+Siguria aktuale vlerësohet si **e mirë për përdorim të kontrolluar familjar/biznesor, por jo ende si siguri e plotë enterprise**. Pikat kryesore janë:
+
+- Supabase Auth menaxhon password-et dhe session-in; password-et nuk ruhen në databazën e aplikacionit.
+- RLS është aktivizuar për tabelat kryesore dhe politikat e reja lejojnë përdorim vetëm për profile me `status = approved`.
+- Funksionet me `SECURITY DEFINER` për admin/profile janë të kufizuara dhe funksionet e brendshme janë zhvendosur në schema `private`.
+- Profilet `pending`, `rejected` dhe `suspended` nuk lejohen të hyjnë në aplikacion.
+- Rate limit-i me pesë tentativa në ditë është mbrojtje UX në `localStorage`, prandaj mund të anashkalohet duke fshirë storage-in ose nga një pajisje tjetër; për mbrojtje të fortë duhet rate limiting server-side/Edge Function.
+- Politikat aktuale u japin përdoruesve të aprovuar qasje të plotë në të dhënat operative. Roli `viewer` ekziston në model, por ende nuk ka politika të ndara për read-only; kjo është një përmirësim i ardhshëm.
+- Backup JSON mund të përmbajë të dhëna të ndjeshme të projekteve dhe duhet të ruhet vetëm në pajisje të besueshme.
+- Mungojnë ende MFA/2FA, audit log i plotë dhe testim automatik end-to-end. Këto janë rreziqe të mbetura, jo funksione të pretenduara si të përfunduara.
+
+Për prodhim më të gjerë rekomandohet: role të ndara me RLS për `viewer`, rate limiting server-side, audit log, MFA, backup i enkriptuar dhe monitorim i gabimeve. Këto kufizime duhet të deklarohen gjatë mbrojtjes së diplomës për të treguar vlerësim kritik të sistemit.
+
 ## 16. Përfundim
 
 Ky projekt paraqet një zgjidhje praktike dhe të strukturuar për menaxhimin e proceseve të lidhura me paramasa, oferta, fatura dhe dokumentacion ndërtimor. Përdorimi i teknologjive moderne web e bën sistemin të shpejtë, të qartë dhe të përshtatshëm për zgjerim të mëtejshëm.
@@ -434,13 +464,13 @@ Për këtë projekt, unë rekomandoj **15 deri në 20 faqe** për versionin për
 
 Nëse profesori kërkon më shumë detajim ose nëse shtohen shumë screenshot-e, atëherë dokumenti mund të shkojë edhe në **20–25 faqe**. Për një version të mirë balancuar, **18 faqe** është një pikë shumë e mirë.
 
-## 19. Burimet reale nga repository
+## 18. Burimet reale nga repository
 
 Për ta bërë dokumentin sa më të saktë me implementimin, janë marrë parasysh këto burime konkrete nga repository:
 
 - [App.tsx](App.tsx) për route-t dhe provider-at globalë.
 - [README.md](README.md) për përshkrimin bazë të projektit.
-- [database-schema.sql](database-schema.sql) për strukturën e databazës dhe RLS.
+- [supabase/user-approval.sql](supabase/user-approval.sql) për profilet, approval workflow dhe RLS.
 - [src/pages/HomePage.tsx](src/pages/HomePage.tsx), [src/pages/RegisterPage.tsx](src/pages/RegisterPage.tsx), [src/pages/ImportPage.tsx](src/pages/ImportPage.tsx), [src/pages/DataPage.tsx](src/pages/DataPage.tsx), [src/pages/SearchPage.tsx](src/pages/SearchPage.tsx), [src/pages/ProfilePage.tsx](src/pages/ProfilePage.tsx), [src/pages/LoginPage.tsx](src/pages/LoginPage.tsx) për funksionalitetet e faqeve.
 - [src/services](src/services) për logjikën e biznesit, eksportet dhe analizat.
 - [src/lib](src/lib) për validimin, llogaritjen dhe eksportin e dokumenteve.
@@ -448,7 +478,7 @@ Për ta bërë dokumentin sa më të saktë me implementimin, janë marrë paras
 
 Kjo do të thotë që dokumenti nuk është shkruar vetëm “nga mendja”, por është përshtatur me strukturën, funksionet dhe asetet reale që ekzistojnë në repository.
 
-## 18. Referenca
+## 19. Referenca
 
 1. React Documentation: https://react.dev
 2. TypeScript Documentation: https://www.typescriptlang.org/docs/

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Download, Eye, Trash2 } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Download, Eye, Trash2 } from 'lucide-react';
 import { ParamasaPreview, type ParamasaPreviewMeta, type PageGroupingMode } from '../components/ParamasaPreview';
 import { ManualPageBuilder } from '../components/ManualPageBuilder';
 import { Shell } from '../components/Shell';
@@ -102,6 +102,7 @@ export function ImportPage() {
   const [projects, setProjects] = useState<DbProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [libriHistory, setLibriHistory] = useState<LibriExportRecord[]>([]);
+  const [libriHistoryPage, setLibriHistoryPage] = useState(1);
   const [viewingHistoryId, setViewingHistoryId] = useState<string | null>(null);
   const [historyActionId, setHistoryActionId] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -109,6 +110,17 @@ export function ImportPage() {
   const reloadLibriHistory = () => {
     fetchLibriExportRecords().then(setLibriHistory);
   };
+
+  const libriHistoryPageSize = 5;
+  const libriHistoryPageCount = Math.max(1, Math.ceil(libriHistory.length / libriHistoryPageSize));
+  const visibleLibriHistory = useMemo(
+    () => libriHistory.slice((libriHistoryPage - 1) * libriHistoryPageSize, libriHistoryPage * libriHistoryPageSize),
+    [libriHistory, libriHistoryPage]
+  );
+
+  useEffect(() => {
+    setLibriHistoryPage((currentPage) => Math.min(currentPage, libriHistoryPageCount));
+  }, [libriHistoryPageCount]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -500,7 +512,7 @@ export function ImportPage() {
             <h3 className="panel-heading-accent">Librat Ndërtimor të ruajtur</h3>
             <p className="muted">Çdo paramasë e analizuar ruhet automatikisht këtu — mund ta rishkarkosh më vonë pa e ringarkuar skedarin origjinal.</p>
             <div className="libri-history-list">
-              {libriHistory.map((record) => (
+              {visibleLibriHistory.map((record) => (
                 <div key={record.id} className="libri-history-row">
                   <div className="libri-history-info">
                     <strong>{record.fileName}</strong>
@@ -546,6 +558,33 @@ export function ImportPage() {
                 </div>
               ))}
             </div>
+            {libriHistoryPageCount > 1 && (
+              <div className="libri-history-pagination" aria-label="Faqet e librave të ruajtur">
+                <button
+                  type="button"
+                  className="card libri-history-page-btn"
+                  onClick={() => setLibriHistoryPage((currentPage) => Math.max(1, currentPage - 1))}
+                  disabled={libriHistoryPage === 1}
+                  aria-label="Faqja e mëparshme"
+                >
+                  <ChevronLeft size={16} />
+                  Para
+                </button>
+                <span className="libri-history-page-status">
+                  Faqja {libriHistoryPage} / {libriHistoryPageCount}
+                </span>
+                <button
+                  type="button"
+                  className="card libri-history-page-btn"
+                  onClick={() => setLibriHistoryPage((currentPage) => Math.min(libriHistoryPageCount, currentPage + 1))}
+                  disabled={libriHistoryPage === libriHistoryPageCount}
+                  aria-label="Faqja tjetër"
+                >
+                  Pas
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            )}
           </section>
         )}
       </div>

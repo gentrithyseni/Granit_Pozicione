@@ -1,4 +1,5 @@
 import { calculatePositionPrice } from '../lib/pricing';
+import { invalidateCache } from '../lib/cache';
 import { supabase } from '../lib/supabase';
 import { recordPriceSnapshot } from './priceHistory';
 
@@ -51,6 +52,7 @@ export async function saveRegisterRow(values: RegisterFormValues) {
     const { data, error } = await supabase.from('categories').insert([{ name: values.newCategoryName.trim() }]).select().single();
     if (error) throw error;
     finalCategoryId = data.id;
+    invalidateCache('categories');
   }
 
   const quantity = Number(values.quantity) || 0;

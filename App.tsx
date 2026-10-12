@@ -7,6 +7,8 @@ import { ToastProvider } from './src/context/ToastContext';
 import { ProtectedRoute } from './src/components/ProtectedRoute';
 import { HomePage } from './src/pages/HomePage';
 import { LoginPage } from './src/pages/LoginPage';
+import { NotFoundPage } from './src/pages/NotFoundPage';
+import { LoadingScreen } from './src/components/LoadingScreen';
 
 const RegisterPage = lazy(() => import('./src/pages/RegisterPage').then((m) => ({ default: m.RegisterPage })));
 const InvoicePage = lazy(() => import('./src/pages/InvoicePage').then((m) => ({ default: m.InvoicePage })));
@@ -14,9 +16,10 @@ const ImportPage = lazy(() => import('./src/pages/ImportPage').then((m) => ({ de
 const DataPage = lazy(() => import('./src/pages/DataPage').then((m) => ({ default: m.DataPage })));
 const SearchPage = lazy(() => import('./src/pages/SearchPage').then((m) => ({ default: m.SearchPage })));
 const ProfilePage = lazy(() => import('./src/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const AboutUsPage = lazy(() => import('./src/pages/AboutUsPage').then((m) => ({ default: m.AboutUsPage })));
 
 function RouteFallback() {
-  return <div className="panel muted" style={{ margin: 18 }}>Duke ngarkuar…</div>;
+  return <LoadingScreen title="Duke u ngarkuar" subtitle="Po përgatitet faqja..." />;
 }
 
 export default function App() {
@@ -84,7 +87,15 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route
+              path="/about-us"
+              element={
+                <ProtectedRoute>
+                  <AboutUsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
           </Suspense>
         </BrowserRouter>

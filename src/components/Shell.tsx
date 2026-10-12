@@ -1,19 +1,29 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
-import { MoonStar, SunMedium } from 'lucide-react';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { Info, LogOut, MoonStar, SunMedium } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
+import { useAuth } from '../hooks/useAuth';
 
 export function Shell({ children }: { children: ReactNode }) {
   const { theme, toggleTheme } = useTheme();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <div className="app-shell">
       <aside className="sidebar card">
         <div>
           <NavLink to="/" end>
-            <span className="sidebar-brand" aria-hidden="true">🏗️</span>
-          <div className="eyebrow accent"> Granit </div>
-          <div className="topbar-title"> Admin panel </div> 
+            <span className="sidebar-brand-frame">
+              <img className="sidebar-brand-mark" src="/branding/megrant-logo.png" alt="Megrant ING" />
+            </span>
+          <div className="eyebrow accent"> Sistemi Administrativ </div>
+          <div className="topbar-title"> Megrant ING </div> 
           </NavLink>
         </div>
         <nav className="sidebar-nav">
@@ -45,10 +55,19 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="sidebar-nav-icon" aria-hidden="true">👤</span>
             <span className="sidebar-nav-text"> Profili </span>
           </NavLink>
+          <NavLink to="/about-us">
+            <span className="sidebar-nav-icon"><Info size={16} /></span>
+            <span className="sidebar-nav-text"> Rreth Nesh </span>
+          </NavLink>
         </nav>
-        <button type="button" className="card theme-toggle-btn" onClick={toggleTheme} aria-label="Ndërro temën">
-          {theme === 'light' ? <MoonStar size={18} /> : <SunMedium size={18} />} {theme === 'light' ? 'Dark' : 'Light'}
-        </button>
+        <div className="sidebar-footer-actions">
+          <button type="button" className="card theme-toggle-btn sidebar-theme-toggle" onClick={toggleTheme} aria-label="Ndërro temën">
+            {theme === 'light' ? <MoonStar size={16} /> : <SunMedium size={16} />} {theme === 'light' ? 'Dark' : 'Light'}
+          </button>
+          <button type="button" className="sidebar-logout-btn" onClick={handleSignOut}>
+            <LogOut size={16} /> Dil nga llogaria
+          </button>
+        </div>
       </aside>
       <main className="main-content">{children}</main>
     </div>

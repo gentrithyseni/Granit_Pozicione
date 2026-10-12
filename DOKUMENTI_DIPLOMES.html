@@ -348,6 +348,8 @@
           <li><a href="#testimi">Testimi dhe vlerësimi</a></li>
           <li><a href="#mbrojtja">Përgatitja për mbrojtje</a></li>
           <li><a href="#screenshots">Screenshot / Figura</a></li>
+          <li><a href="#perditesimet">Përditësimet deri më 12.10.2026</a></li>
+          <li><a href="#siguria">Siguria dhe kufizimet</a></li>
           <li><a href="#perparesite">Përparësitë dhe zhvillimi i mëtejshëm</a></li>
           <li><a href="#referencat">Referencat</a></li>
           <li><a href="#burimet">Burimet reale nga repository</a></li>
@@ -553,13 +555,13 @@
 
     <section class="section" id="teDhenat">
       <h2>8. Të dhënat dhe skema</h2>
-      <p>Skema e databazës në <code>database-schema.sql</code> përfshin tabelat:</p>
+      <p>Databaza dhe migration-i i sigurisë dokumentohen në <code>supabase/user-approval.sql</code> dhe përdorin tabelat:</p>
       <ul>
         <li><code>categories</code></li>
         <li><code>projects</code></li>
         <li><code>project_items</code></li>
         <li><code>item_expenses</code></li>
-        <li><code>import_history</code></li>
+        <li><code>price_history</code>, <code>libri_exports</code> dhe <code>profiles</code></li>
       </ul>
       <p>
         Në logjikën e aplikacionit përdoren edhe funksione për historikun e çmimeve dhe eksportet e ruajtura.
@@ -571,7 +573,7 @@
         <li><strong>Kategoritë</strong>: emri dhe përshkrimi.</li>
         <li><strong>Pozicionet</strong>: numër pozicioni, përshkrim, njësi, sasi, çmim dhe total.</li>
         <li><strong>Shpenzimet e detajuara</strong>: material, punë, ushqim, transport dhe të tjera.</li>
-        <li><strong>Historiku i importeve</strong>: skedarët e importuar dhe undo.</li>
+        <li><strong>Historiku i importeve</strong>: <code>import_history</code> është legacy dhe nuk përdoret aktualisht; historiku aktiv i Librave është në <code>libri_exports</code>.</li>
         <li><strong>Eksportet</strong>: Libri Ndërtimor, CSV dhe JSON backup.</li>
       </ul>
     </section>
@@ -579,7 +581,7 @@
     <section class="section" id="faqet">
       <h2>9. Faqet e aplikacionit</h2>
       <h3>Faqja kryesore</h3>
-      <p>Shfaq statistika, statuset e projekteve dhe qasje të shpejta drejt moduleve kryesore.</p>
+      <p>Shfaq statistika, statuset e projekteve, grafikë analitike dhe përmbledhje të Librave Ndërtimor sipas vlerës, faqeve dhe pozicioneve.</p>
       <h3>Faqja e regjistrimit</h3>
       <p>Lejon futje manuale të pozicioneve dhe llogaritje të detajuara të kostove.</p>
       <h3>Faqja e faturës</h3>
@@ -591,7 +593,7 @@
       <h3>Faqja e kërkimit</h3>
       <p>Ofron kërkim global në përshkrime, numra pozicionesh dhe projekte.</p>
       <h3>Faqja e profilit</h3>
-      <p>Menaxhon llogarinë, ndryshimin e password-it dhe backup-in JSON.</p>
+      <p>Menaxhon llogarinë, ndryshimin e password-it, backup-in JSON, statusin e profilit dhe approval workflow për përdoruesit.</p>
     </section>
 
     <section class="section" id="funksione">
@@ -676,8 +678,37 @@
       </div>
     </section>
 
+    <section class="section" id="perditesimet">
+      <h2>14. Përditësimet e implementuara deri më 12.10.2026</h2>
+      <ul>
+        <li>Dashboard i Librave Ndërtimor me vlerë totale, vlerë mesatare, Top 5 sipas vlerës, faqe dhe pozicione.</li>
+        <li>Pagination për historikun e Librave me pesë libra për faqe dhe invalidim cache pas ruajtjes/fshirjes.</li>
+        <li>Cache në memory për kategoritë dhe historikun e Librave me TTL të kontrolluar.</li>
+        <li>Regjistrim me status <code>pending</code>, aprovim/refuzim/pezullim nga administratori dhe statistika në profil.</li>
+        <li>Njoftim i aprovimit vetëm një herë në aplikacion përmes <code>approval_notice_seen_at</code>; nuk përdoren email-e të dyta për approve/reject.</li>
+        <li>Timeout automatik pas 60 minutash pa aktivitet dhe kufizim lokal prej pesë tentativash të pasuksesshme ditore.</li>
+        <li>Loading screen me logo, glassmorphism, dual-ring, glow dhe progress shimmer, si dhe faqe 404.</li>
+        <li>Faqe e veçantë About Us, responsive design, PWA manifest dhe përdorim i logos reale të Megrant ING.</li>
+      </ul>
+    </section>
+
+    <section class="section" id="siguria">
+      <h2>15. Siguria, validimet dhe kufizimet</h2>
+      <p>Projekti ka bazë të mirë sigurie për përdorim të kontrolluar familjar/biznesor, por nuk duhet të paraqitet si sistem enterprise pa përmirësime shtesë.</p>
+      <ul>
+        <li>Supabase Auth ruan password-et dhe menaxhon session-in; aplikacioni nuk ruan password në tabelat e veta.</li>
+        <li>RLS kufizon tabelat operative për profile të aprovuara dhe profilet pending/rejected nuk lejohen në aplikacion.</li>
+        <li>Funksionet e brendshme administrative mbrohen me <code>SECURITY DEFINER</code>, schema private dhe privilegje të kufizuara.</li>
+        <li>Rate limit-i prej pesë tentativash në ditë është kryesisht mbrojtje në browser dhe mund të anashkalohet me pastrim të localStorage; rate limiting server-side rekomandohet për prodhim.</li>
+        <li>Roli <code>viewer</code> ekziston, por politikat aktuale ende nuk e kufizojnë në read-only; përdoruesit e aprovuar kanë qasje operative sipas RLS aktual.</li>
+        <li>Backup JSON mund të përmbajë të dhëna financiare dhe duhet të ruhet në pajisje të besueshme.</li>
+        <li>Mungojnë ende MFA/2FA, audit log i plotë dhe testime automatike end-to-end.</li>
+      </ul>
+      <p>Rekomandohen role të ndara me RLS, rate limiting server-side, MFA, audit log, backup i enkriptuar dhe monitorim i gabimeve.</p>
+    </section>
+
     <section class="section" id="perparesite">
-      <h2>13. Përparësitë dhe zhvillimi i mëtejshëm</h2>
+      <h2>16. Përparësitë dhe zhvillimi i mëtejshëm</h2>
       <ul>
         <li>Centralizon të gjitha të dhënat në një sistem të vetëm.</li>
         <li>Automatizon llogaritjet dhe eksportet.</li>
@@ -689,7 +720,7 @@
     </section>
 
     <section class="section" id="referencat">
-      <h2>14. Referencat</h2>
+      <h2>17. Referencat</h2>
       <ol>
         <li>React Documentation – https://react.dev</li>
         <li>TypeScript Documentation – https://www.typescriptlang.org/docs/</li>
@@ -704,11 +735,11 @@
     </section>
 
     <section class="section" id="burimet">
-      <h2>15. Burimet reale nga repository</h2>
+      <h2>18. Burimet reale nga repository</h2>
       <ul>
         <li><code>App.tsx</code> për route-t dhe provider-at globalë.</li>
         <li><code>README.md</code> për përshkrimin bazë të projektit.</li>
-        <li><code>database-schema.sql</code> për strukturën e databazës dhe RLS.</li>
+        <li><code>supabase/user-approval.sql</code> për profilet, approval workflow dhe RLS.</li>
         <li><code>src/pages</code> për të gjitha faqet kryesore.</li>
         <li><code>src/services</code> për logjikën e biznesit, eksportet dhe analizat.</li>
         <li><code>src/lib</code> për validim, kalkulim dhe eksport dokumentesh.</li>

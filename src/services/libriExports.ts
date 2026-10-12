@@ -1,8 +1,12 @@
 import { supabase } from '../lib/supabase';
 import type { ParsedRow } from '../lib/excel';
 import { planLibriExport } from '../lib/libriExportPlan';
+import { getCached, invalidateCache } from '../lib/cache';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 import type { DbLibriExport } from '../types/database';
+
+const LIBRI_EXPORTS_CACHE_KEY = 'libri-exports';
+const LIBRI_EXPORTS_CACHE_TTL_MS = 2 * 60 * 1000;
 
 export type LibriExportRecord = {
   id: string;
@@ -63,7 +67,7 @@ export async function saveLibriExportRecord(fileName: string, rows: ParsedRow[],
   if (!supabase) return;
   const totalValue = rows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
   try {
-    await supabase.from('libri_exports').insert([
+    const { error } = await supabase.from('libri_exports').insert([
       {
         file_name: fileName,
         positions_count: rows.length,
@@ -72,6 +76,7 @@ export async function saveLibriExportRecord(fileName: string, rows: ParsedRow[],
         rows,
       },
     ]);
+    if (!error) invalidateCache(LIBRI_EXPORTS_CACHE_KEY);
   } catch {
     // tabela libri_exports mund të mos ekzistojë ende (migrim i pa ekzekutuar) — s'duam ta
     // ndalojmë rrjedhën kryesore të importit për këtë.
@@ -105,12 +110,20 @@ export function summarizeLibriExportRecords(records: LibriExportRecord[]): Libri
 
 export async function fetchLibriExportRecords(): Promise<LibriExportRecord[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.from('libri_exports').select('*').order('created_at', { ascending: false }).limit(50);
-  if (error || !data) return [];
-  return (data as DbLibriExport[]).map(mapRecord);
+  const client = supabase;
+  return getCached(
+    LIBRI_EXPORTS_CACHE_KEY,
+    async () => {
+      const { data, error } = await client.from('libri_exports').select('*').order('created_at', { ascending: false }).limit(50);
+      if (error || !data) return [];
+      return (data as DbLibriExport[]).map(mapRecord);
+    },
+    LIBRI_EXPORTS_CACHE_TTL_MS
+  );
 }
 
 export async function deleteLibriExportRecord(id: string): Promise<void> {
   if (!supabase) return;
-  await supabase.from('libri_exports').delete().eq('id', id);
+  const { error } = await supabase.from('libri_exports').delete().eq('id', id);
+  if (!error) invalidateCache(LIBRI_EXPORTS_CACHE_KEY);
 }

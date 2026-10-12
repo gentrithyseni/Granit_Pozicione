@@ -1,29 +1,40 @@
 import { DEFAULT_CATEGORIES } from '../constants/defaultCategories';
+import { getCached, invalidateCache } from '../lib/cache';
 import { supabase } from '../lib/supabase';
 import type { DbCategory } from '../types/database';
+
+const CATEGORIES_CACHE_KEY = 'categories';
+const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000;
 
 /** Shton kategoritë standarde nëse nuk ekzistojnë (krahasim pa dallim të madhës së shkronjës). */
 export async function ensureDefaultCategories(): Promise<DbCategory[]> {
   if (!supabase) return [];
+  const client = supabase;
 
-  const { data: existing } = await supabase.from('categories').select('*');
-  const list = existing || [];
+  return getCached(
+    CATEGORIES_CACHE_KEY,
+    async () => {
+      const { data: existing } = await client.from('categories').select('*');
+      const list = existing || [];
 
-  const normalize = (s: string) => s.trim().toLowerCase();
+      const normalize = (s: string) => s.trim().toLowerCase();
 
-  for (const cat of DEFAULT_CATEGORIES) {
-    const found = list.some((c) => normalize(c.name) === normalize(cat.name));
-    if (!found) {
-      const { data: inserted } = await supabase
-        .from('categories')
-        .insert([{ name: cat.name, description: cat.description }])
-        .select()
-        .single();
-      if (inserted) list.push(inserted);
-    }
-  }
+      for (const cat of DEFAULT_CATEGORIES) {
+        const found = list.some((c) => normalize(c.name) === normalize(cat.name));
+        if (!found) {
+          const { data: inserted } = await client
+            .from('categories')
+            .insert([{ name: cat.name, description: cat.description }])
+            .select()
+            .single();
+          if (inserted) list.push(inserted);
+        }
+      }
 
-  return list.sort((a, b) => a.name.localeCompare(b.name, 'sq'));
+      return list.sort((a, b) => a.name.localeCompare(b.name, 'sq'));
+    },
+    CATEGORIES_CACHE_TTL_MS
+  );
 }
 
 /** Fshin një kategori. Pozicionet që e përdornin (project_items.category_id) mbeten (bëhen
@@ -34,6 +45,7 @@ export async function ensureDefaultCategories(): Promise<DbCategory[]> {
 export async function deleteCategory(id: string): Promise<{ error: string | null }> {
   if (!supabase) return { error: 'Supabase nuk është i lidhur' };
   const { error } = await supabase.from('categories').delete().eq('id', id);
+  if (!error) invalidateCache(CATEGORIES_CACHE_KEY);
   return { error: error?.message ?? null };
 }
 
