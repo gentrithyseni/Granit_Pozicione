@@ -5,10 +5,29 @@ import { formatDateTime, wasUpdated } from '../lib/dates';
 import { PricingPreview } from './PricingPreview';
 import EditModal from './EditModal';
 import { pushAdjustLog } from '../lib/audit';
+import { categoryDisplayName, uniqueCategories } from '../services/categories';
 
-type ItemWithMeta = DbProjectItem & {
+export type ItemWithMeta = DbProjectItem & {
   projects?: { name: string } | null;
   categories?: { name: string } | null;
+};
+
+export type PositionEditForm = {
+  description: string;
+  position_number: string;
+  unit: string;
+  quantity: string;
+  category_id: string;
+  project_id: string;
+  materialPrice: string;
+  laborPrice: string;
+  days: string;
+  foodPrice: string;
+  location: string;
+  transportPrice: string;
+  otherPrice: string;
+  profitPercent: string;
+  vatPercent: string;
 };
 
 type Props = {
@@ -19,25 +38,11 @@ type Props = {
   onCompareA?: () => void;
   onCompareB?: () => void;
   editing?: boolean;
-  editForm?: {
-    description: string;
-    position_number: string;
-    unit: string;
-    quantity: number;
-    category_id: string;
-    materialPrice: number;
-    laborPrice: number;
-    days: number;
-    foodPrice: number;
-    location: string;
-    transportPrice: number;
-    otherPrice: number;
-    profitPercent: number;
-    vatPercent: number;
-  };
-  onEditFormChange?: (form: any) => void;
+  editForm?: PositionEditForm;
+  onEditFormChange?: (form: PositionEditForm) => void;
   onSave?: () => void;
   onCancel?: () => void;
+  onReset?: () => void;
   onDelete?: () => void;
   categories?: DbCategory[];
 };
@@ -54,10 +59,16 @@ export function PositionCard({
   onEditFormChange,
   onSave,
   onCancel,
+  onReset,
   onDelete,
   categories = [],
 }: Props) {
   const modified = wasUpdated(item.created_at, item.updated_at);
+  const editCategories = uniqueCategories(categories);
+  const selectedCategory = categories.find((category) => category.id === editForm?.category_id);
+  if (selectedCategory && !editCategories.some((category) => category.id === selectedCategory.id)) {
+    editCategories.push(selectedCategory);
+  }
   const [targetTotal, setTargetTotal] = useState('');
   const [mode, setMode] = useState<'proportional' | 'labor-first' | 'material-first'>('proportional');
   const [weight, setWeight] = useState(0.7);
@@ -69,7 +80,7 @@ export function PositionCard({
         <div>
           <strong>{item.description}</strong>
           {item.position_number && <span className="muted"> · Nr {item.position_number}</span>}
-          {item.categories?.name && <> · <span className="accent">{item.categories.name}</span></>}
+          {item.categories?.name && <> · <span className="accent">{categoryDisplayName(item.categories.name)}</span></>}
         </div>
       </div>
 
@@ -106,7 +117,7 @@ export function PositionCard({
                 Kategoria e pozicionit
                 <select value={editForm.category_id} onChange={(e) => onEditFormChange?.({ ...editForm, category_id: e.target.value })}>
                   <option value="">Pa kategori</option>
-                  {categories.map((category) => (
+                  {editCategories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
                     </option>
@@ -128,7 +139,7 @@ export function PositionCard({
               </label>
               <label>
                 Sasia
-                <input type="number" step="0.01" value={editForm.quantity} onChange={(e) => onEditFormChange?.({ ...editForm, quantity: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.quantity} onChange={(e) => onEditFormChange?.({ ...editForm, quantity: e.target.value })} />
               </label>
             </div>
           </section>
@@ -138,27 +149,27 @@ export function PositionCard({
             <div className="form-grid">
               <label>
                 Materiali për njësi (€)
-                <input type="number" step="0.01" value={editForm.materialPrice} onChange={(e) => onEditFormChange?.({ ...editForm, materialPrice: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.materialPrice} onChange={(e) => onEditFormChange?.({ ...editForm, materialPrice: e.target.value })} />
               </label>
               <label>
                 Puna për njësi (€)
-                <input type="number" step="0.01" value={editForm.laborPrice} onChange={(e) => onEditFormChange?.({ ...editForm, laborPrice: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.laborPrice} onChange={(e) => onEditFormChange?.({ ...editForm, laborPrice: e.target.value })} />
               </label>
               <label>
                 Ditë pune
-                <input type="number" step="0.5" value={editForm.days} onChange={(e) => onEditFormChange?.({ ...editForm, days: Number(e.target.value) })} />
+                <input type="number" step="0.5" value={editForm.days} onChange={(e) => onEditFormChange?.({ ...editForm, days: e.target.value })} />
               </label>
               <label>
                 Ushqim ditor (€)
-                <input type="number" step="0.01" value={editForm.foodPrice} onChange={(e) => onEditFormChange?.({ ...editForm, foodPrice: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.foodPrice} onChange={(e) => onEditFormChange?.({ ...editForm, foodPrice: e.target.value })} />
               </label>
               <label>
                 Transport ditor (€)
-                <input type="number" step="0.01" value={editForm.transportPrice} onChange={(e) => onEditFormChange?.({ ...editForm, transportPrice: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.transportPrice} onChange={(e) => onEditFormChange?.({ ...editForm, transportPrice: e.target.value })} />
               </label>
               <label>
                 Shpenzime tjera (€)
-                <input type="number" step="0.01" value={editForm.otherPrice} onChange={(e) => onEditFormChange?.({ ...editForm, otherPrice: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.otherPrice} onChange={(e) => onEditFormChange?.({ ...editForm, otherPrice: e.target.value })} />
               </label>
             </div>
           </section>
@@ -168,17 +179,27 @@ export function PositionCard({
             <div className="form-grid">
               <label>
                 Fitimi (%)
-                <input type="number" step="0.01" value={editForm.profitPercent} onChange={(e) => onEditFormChange?.({ ...editForm, profitPercent: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.profitPercent} onChange={(e) => onEditFormChange?.({ ...editForm, profitPercent: e.target.value })} />
               </label>
               <label>
                 TVSH (%)
-                <input type="number" step="0.01" value={editForm.vatPercent} onChange={(e) => onEditFormChange?.({ ...editForm, vatPercent: Number(e.target.value) })} />
+                <input type="number" step="0.01" value={editForm.vatPercent} onChange={(e) => onEditFormChange?.({ ...editForm, vatPercent: e.target.value })} />
               </label>
             </div>
           </section>
 
           <div className="position-card-actions edit-form-actions">
             <button type="button" className="primary-button" onClick={onSave}>Ruaj</button>
+            <button
+              type="button"
+              className="card"
+              onClick={() => {
+                setTargetTotal('');
+                onReset?.();
+              }}
+            >
+              Rikthe vlerat fillestare
+            </button>
             <button type="button" className="card" onClick={onCancel}>Anulo</button>
           </div>
 
@@ -250,7 +271,11 @@ export function PositionCard({
 
                     const before = { materialPrice: Number(editForm.materialPrice) || 0, laborPrice: Number(editForm.laborPrice) || 0 };
                     const after = { materialPrice: Number(newMaterialPerUnit) || 0, laborPrice: Number(newLaborPerUnit) || 0 };
-                    onEditFormChange?.({ ...editForm, materialPrice: Number(newMaterialPerUnit) || 0, laborPrice: Number(newLaborPerUnit) || 0 });
+                    onEditFormChange?.({
+                      ...editForm,
+                      materialPrice: String(Number(newMaterialPerUnit) || 0),
+                      laborPrice: String(Number(newLaborPerUnit) || 0),
+                    });
 
                     try {
                       pushAdjustLog({
@@ -294,6 +319,7 @@ export function PositionCard({
       ) : (
         <div className="position-card-actions" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="primary-button" onClick={onEdit}>Ndrysho</button>
+          {selected && <button type="button" className="card" onClick={onSelect}>Mbyll përzgjedhjen</button>}
           {onCompareA && (
             <button type="button" className="card" onClick={onCompareA}>Krahasim A</button>
           )}

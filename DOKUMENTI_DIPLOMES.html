@@ -1,760 +1,302 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="sq">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Draft i punimit bachelor për sistemin e vlerësimit të ofertave dhe menaxhimit të të dhënave në projekte.">
   <title>Zhvillim i Sistemit për Vlerësimin e Ofertave dhe Menaxhimin e të Dhënave në Projekte</title>
   <style>
-    :root {
-      --text: #1f2937;
-      --muted: #6b7280;
-      --accent: #0f4c81;
-      --line: #dbe3ea;
-      --bg: #f7f9fc;
-      --card: #ffffff;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      color: var(--text);
-      background: linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
-      line-height: 1.55;
-    }
-    .page {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 32px 28px 56px;
-    }
-    .cover {
-      min-height: 90vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      padding: 40px 20px;
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
-      margin-bottom: 28px;
-    }
-    .kicker {
-      text-transform: uppercase;
-      letter-spacing: .18em;
-      font-size: 12px;
-      color: var(--accent);
-      font-weight: 700;
-    }
-    h1 {
-      margin: 14px 0 10px;
-      font-size: clamp(30px, 5vw, 48px);
-      line-height: 1.12;
-    }
-    .subtitle {
-      max-width: 760px;
-      color: var(--muted);
-      font-size: 16px;
-      margin: 10px auto 28px;
-    }
-    .meta-grid {
-      width: 100%;
-      max-width: 720px;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      text-align: left;
-      margin-top: 8px;
-    }
-    .meta-item {
-      border: 1px solid var(--line);
-      background: #fbfdff;
-      border-radius: 12px;
-      padding: 14px 16px;
-    }
-    .meta-label {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 4px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-    }
-    .meta-value { font-weight: 700; }
-    .section {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 28px;
-      margin-bottom: 18px;
-      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
-    }
-    h2 {
-      margin: 0 0 14px;
-      color: var(--accent);
-      font-size: 24px;
-    }
-    h3 {
-      margin: 18px 0 10px;
-      font-size: 18px;
-      color: #17324d;
-    }
-    p { margin: 0 0 12px; }
-    ul, ol { margin: 10px 0 14px 22px; }
-    li { margin: 6px 0; }
-    .toc {
-      columns: 2;
-      column-gap: 28px;
-    }
-    .toc a { color: var(--accent); text-decoration: none; }
-    .toc a:hover { text-decoration: underline; }
-    .note {
-      border-left: 4px solid var(--accent);
-      background: #f3f8fd;
-      padding: 14px 16px;
-      border-radius: 10px;
-      color: #1e3b57;
-    }
-    .figure {
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, #ffffff 0%, #f9fbfe 100%);
-      border-radius: 14px;
-      padding: 18px;
-      margin: 16px 0 10px;
-    }
-    .figure-title {
-      font-weight: 700;
-      color: #17324d;
-      margin-bottom: 10px;
-    }
-    .figure-caption {
-      color: var(--muted);
-      font-size: 13px;
-      margin-top: 8px;
-    }
-    .screenshot-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 14px;
-    }
-    .shot-card {
-      border: 1px dashed #b7c7d6;
-      background: #fbfdff;
-      border-radius: 14px;
-      overflow: hidden;
-      min-height: 220px;
-      display: flex;
-      flex-direction: column;
-    }
-    .shot-preview {
-      min-height: 150px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: linear-gradient(135deg, #eef5fb 0%, #ffffff 100%);
-      color: #6b7280;
-      font-weight: 700;
-      letter-spacing: .04em;
-      text-transform: uppercase;
-      padding: 18px;
-      text-align: center;
-    }
-    .shot-meta {
-      padding: 12px 14px 14px;
-      border-top: 1px solid var(--line);
-    }
-    .shot-title {
-      display: block;
-      font-weight: 800;
-      color: #17324d;
-      margin-bottom: 4px;
-    }
-    .shot-desc {
-      display: block;
-      color: var(--muted);
-      font-size: 13px;
-    }
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 10px;
-      margin-top: 14px;
-    }
-    .stat-card {
-      background: #ffffff;
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 12px 10px;
-      text-align: center;
-    }
-    .stat-num {
-      display: block;
-      font-size: 24px;
-      font-weight: 800;
-      color: var(--accent);
-      line-height: 1;
-      margin-bottom: 6px;
-    }
-    .stat-label {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.2;
-    }
-    .bar-chart {
-      display: grid;
-      grid-template-columns: 140px 1fr 48px;
-      gap: 10px 14px;
-      align-items: center;
-      margin-top: 14px;
-    }
-    .bar-label {
-      font-weight: 700;
-      color: #17324d;
-    }
-    .bar-track {
-      height: 14px;
-      background: #e7eef5;
-      border-radius: 999px;
-      overflow: hidden;
-    }
-    .bar-fill {
-      height: 100%;
-      border-radius: inherit;
-      background: linear-gradient(90deg, #0f4c81 0%, #2d7cc0 100%);
-    }
-    .bar-value {
-      text-align: right;
-      font-weight: 700;
-      color: #17324d;
-    }
-    .flow {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-top: 14px;
-      align-items: stretch;
-    }
-    .flow-item {
-      position: relative;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      background: #fff;
-      padding: 14px 12px;
-      min-height: 92px;
-      text-align: center;
-    }
-    .flow-item::after {
-      content: '→';
-      position: absolute;
-      right: -13px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--accent);
-      font-size: 20px;
-      font-weight: 800;
-    }
-    .flow-item:last-child::after { content: ''; }
-    .flow-kicker {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      margin-bottom: 6px;
-    }
-    .flow-title {
-      display: block;
-      font-size: 15px;
-      font-weight: 800;
-      color: #17324d;
-    }
-    .flow-desc {
-      display: block;
-      margin-top: 6px;
-      font-size: 13px;
-      color: var(--muted);
-    }
-    .footer {
-      color: var(--muted);
-      text-align: center;
-      font-size: 13px;
-      margin-top: 24px;
-      padding-bottom: 24px;
-    }
-    code {
-      background: #eef3f7;
-      padding: 2px 6px;
-      border-radius: 6px;
-      font-size: .95em;
+    :root { color-scheme: light; --ink:#202b36; --muted:#526170; --blue:#174b70; --line:#cbd5df; --paper:#fff; --wash:#f1f5f8; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:#e9eef2; color:var(--ink); font:16px/1.7 Georgia,"Times New Roman",serif; }
+    main { max-width:920px; margin:32px auto; padding:0 22px 48px; }
+    .cover,.sheet { background:var(--paper); border:1px solid var(--line); padding:52px 64px; margin-bottom:22px; }
+    .cover { min-height:950px; display:flex; flex-direction:column; align-items:center; text-align:center; }
+    .institution { margin-top:14px; line-height:1.45; font-weight:700; letter-spacing:.03em; }
+    .cover-rule { width:110px; border:0; border-top:2px solid var(--blue); margin:52px auto; }
+    .degree { text-transform:uppercase; color:var(--blue); letter-spacing:.12em; font:700 13px/1.5 Arial,sans-serif; margin-top:70px; }
+    h1 { max-width:720px; font-size:34px; line-height:1.25; margin:24px auto; }
+    .cover-meta { width:min(570px,100%); margin-top:auto; text-align:left; }
+    .cover-meta p { margin:8px 0; border-bottom:1px dotted #96a3af; }
+    .draft-mark { color:var(--muted); font:italic 14px Arial,sans-serif; margin-top:36px; }
+    h2 { color:var(--blue); font-size:24px; line-height:1.3; margin:0 0 18px; }
+    h3 { font-size:18px; margin:22px 0 8px; }
+    p { margin:0 0 13px; text-align:justify; }
+    ul,ol { margin:8px 0 16px; padding-left:25px; }
+    li { margin:5px 0; }
+    .abstract { background:var(--wash); border-left:4px solid var(--blue); padding:18px 22px; margin:18px 0; }
+    .keywords { font-size:14px; }
+    .toc ol { columns:2; column-gap:42px; }
+    .toc a { color:var(--blue); text-decoration:none; }
+    .toc a:hover { text-decoration:underline; }
+    table { width:100%; border-collapse:collapse; margin:16px 0; font-size:14px; }
+    th,td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+    th { background:var(--wash); }
+    pre { overflow-wrap:anywhere; white-space:pre-wrap; background:#f4f7f9; border:1px solid var(--line); padding:14px 18px; font:14px/1.6 Consolas,monospace; }
+    .figure { border:1px solid var(--line); background:#fbfcfd; padding:18px; margin:16px 0; font:14px/1.6 Arial,sans-serif; }
+    .flow { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:8px; }
+    .node { border:1px solid #9fb2c2; background:#fff; border-radius:6px; padding:10px 13px; text-align:center; }
+    .arrow { color:var(--blue); font-weight:700; }
+    .caption { color:var(--muted); font-size:13px; text-align:center; margin-top:10px; }
+    .note { border-left:4px solid #a66b17; background:#fff8e9; padding:12px 16px; margin:16px 0; }
+    .page-break { break-before:page; }
+    footer { color:var(--muted); text-align:center; font:12px Arial,sans-serif; padding:12px; }
+    @media (max-width:700px) {
+      main { margin:10px auto; padding:0 10px 20px; }
+      .cover,.sheet { padding:30px 24px; }
+      .cover { min-height:850px; }
+      h1 { font-size:27px; }
+      .toc ol { columns:1; }
     }
     @media print {
-      body { background: #fff; }
-      .page { max-width: none; padding: 0; }
-      .cover, .section { box-shadow: none; border-radius: 0; page-break-inside: avoid; }
-      .section { border-left: none; border-right: none; }
-      .cover { min-height: auto; page-break-after: always; }
-      .toc { columns: 1; }
-    }
-    @media (max-width: 720px) {
-      .meta-grid { grid-template-columns: 1fr; }
-      .toc { columns: 1; }
-      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .bar-chart { grid-template-columns: 1fr; }
-      .bar-value { text-align: left; }
-      .flow { grid-template-columns: 1fr; }
-      .flow-item::after { content: ''; }
-      .screenshot-grid { grid-template-columns: 1fr; }
+      body { background:#fff; font-size:11pt; }
+      main { max-width:none; margin:0; padding:0; }
+      .cover,.sheet { border:0; margin:0; padding:22mm 23mm; box-shadow:none; }
+      .cover { min-height:250mm; page-break-after:always; }
+      .sheet { page-break-inside:auto; }
+      h2,h3,table,pre,.figure { break-inside:avoid; }
+      a { color:inherit; }
+      footer { display:none; }
     }
   </style>
 </head>
 <body>
-  <div class="page">
-    <section class="cover">
-      <div class="kicker">Temë Diplome</div>
-      <h1>Zhvillim i Sistemit për Vlerësimin e Ofertave dhe Menaxhimin e të Dhënave në Projekte</h1>
-      <p class="subtitle">
-        Dokument formal për një sistem web që vlerëson ofertat dhe menaxhon të dhënat e projekteve, i përgatitur mbi bazën e repository-t ekzistues duke përfshirë kodin burimor,
-        skemën e databazës, shërbimet, faqet, komponentët dhe materialet shembull të ruajtura në folderët
-        <code>Fatura</code> dhe <code>Paramasa</code>.
-      </p>
-      <div class="meta-grid">
-        <div class="meta-item"><span class="meta-label">Studenti</span><span class="meta-value">[Emri Mbiemri]</span></div>
-        <div class="meta-item"><span class="meta-label">Numri i indeksit</span><span class="meta-value">[Plotëso]</span></div>
-        <div class="meta-item"><span class="meta-label">Mentori</span><span class="meta-value">[Plotëso]</span></div>
-        <div class="meta-item"><span class="meta-label">Viti akademik</span><span class="meta-value">2025/2026</span></div>
-        <div class="meta-item"><span class="meta-label">Programi</span><span class="meta-value">Inxhinieri Softuerike / Shkenca Kompjuterike</span></div>
-        <div class="meta-item"><span class="meta-label">Institucioni</span><span class="meta-value">[Plotëso]</span></div>
-      </div>
-    </section>
-
-    <section class="section">
-      <h2>Përmbajtja</h2>
-      <div class="toc">
-        <ol>
-          <li><a href="#hyrje">Hyrje</a></li>
-          <li><a href="#problemi">Problemi që zgjidhet</a></li>
-          <li><a href="#qellimi">Qëllimi dhe objektivat</a></li>
-          <li><a href="#metodologjia">Metodologjia</a></li>
-          <li><a href="#teknologjite">Teknologjitë</a></li>
-          <li><a href="#arkitektura">Arkitektura e sistemit</a></li>
-          <li><a href="#vleresimi">Vlerësimi i ofertave</a></li>
-          <li><a href="#funksionalitetet">Funksionalitetet</a></li>
-          <li><a href="#teDhenat">Të dhënat dhe skema</a></li>
-          <li><a href="#faqet">Faqet e aplikacionit</a></li>
-          <li><a href="#funksione">Funksionet kryesore</a></li>
-          <li><a href="#testimi">Testimi dhe vlerësimi</a></li>
-          <li><a href="#mbrojtja">Përgatitja për mbrojtje</a></li>
-          <li><a href="#screenshots">Screenshot / Figura</a></li>
-          <li><a href="#perditesimet">Përditësimet deri më 12.10.2026</a></li>
-          <li><a href="#siguria">Siguria dhe kufizimet</a></li>
-          <li><a href="#perparesite">Përparësitë dhe zhvillimi i mëtejshëm</a></li>
-          <li><a href="#referencat">Referencat</a></li>
-          <li><a href="#burimet">Burimet reale nga repository</a></li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="section" id="hyrje">
-      <h2>1. Hyrje</h2>
-      <p>
-        Në sektorin e ndërtimit, proceset e llogaritjes së paramasave, ofertave dhe dokumentacionit shpesh mbështeten
-        në Excel, dokumente manuale dhe procedura të shpërndara. Kjo rrit gabimet, e ngadalëson punën dhe e vështirëson
-        ruajtjen e historikut.
-      </p>
-      <p>
-        Ky projekt adreson këtë problem duke ofruar një platformë web të centralizuar për menaxhim të të dhënave,
-        automatizim të llogaritjeve dhe gjenerim të dokumenteve të standardizuara.
-      </p>
-      <div class="note">
-        Dokumenti është i lidhur me implementimin real në repository, jo me një tekst të imagjinuar: përfshin vetëm
-        funksionet dhe modulet që ekzistojnë në kodin burimor dhe skemën e databazës.
-      </div>
-    </section>
-
-    <section class="section" id="problemi">
-      <h2>2. Problemi që zgjidhet</h2>
-      <ul>
-        <li>Ruajtje e shpërndarë e të dhënave në Excel dhe dokumente manuale.</li>
-        <li>Llogaritje të përsëritura dhe të ndjeshme ndaj gabimeve.</li>
-        <li>Mungesë e kërkimit të shpejtë në të dhëna historike.</li>
-        <li>Mungesë e historikut të çmimeve dhe analizës krahasuese.</li>
-        <li>Vështirësi në gjenerimin e Librit Ndërtimor dhe faturave në format të standardizuar.</li>
-      </ul>
-    </section>
-
-    <section class="section" id="qellimi">
-      <h2>3. Qëllimi dhe objektivat</h2>
-      <p>Qëllimi i projektit është të ndërtohet një sistem web që:</p>
-      <ul>
-        <li>lehtëson futjen dhe menaxhimin e pozicioneve të punës,</li>
-        <li>importon dhe përpunon të dhëna nga Excel,</li>
-        <li>gjeneron faqe dhe dokumente për Libër Ndërtimor,</li>
-        <li>ofron analizë dhe statistikë të të dhënave,</li>
-        <li>ruan informacionin në mënyrë të sigurt në Supabase,</li>
-        <li>mbështet autentikim dhe kontroll aksesi.</li>
-      </ul>
-    </section>
-
-    <section class="section" id="metodologjia">
-      <h2>4. Metodologjia</h2>
-      <p>Puna është zhvilluar në mënyrë praktike dhe iteruese:</p>
-      <ol>
-        <li>Analizë e problemit dhe identifikim i nevojave.</li>
-        <li>Projektim i strukturës së faqeve dhe të dhënave.</li>
-        <li>Ndërtim i komponentëve të ripërdorshëm dhe i logjikës së biznesit.</li>
-        <li>Integrim me Supabase për auth dhe databazë.</li>
-        <li>Implementim i importit Excel, eksportit dhe preview-t.</li>
-        <li>Testim me të dhëna reale dhe shabllone ekzistuese.</li>
-      </ol>
-    </section>
-
-    <section class="section" id="teknologjite">
-      <h2>5. Teknologjitë e përdorura</h2>
-      <ul>
-        <li><strong>React 18</strong> për UI me komponentë të ripërdorshëm.</li>
-        <li><strong>TypeScript</strong> për tipizim dhe siguri më të mirë të kodit.</li>
-        <li><strong>Vite</strong> për build dhe development server të shpejtë.</li>
-        <li><strong>React Router 6</strong> për navigim midis faqeve.</li>
-        <li><strong>Supabase</strong> për Auth, PostgreSQL dhe RLS.</li>
-        <li><strong>react-hook-form</strong> për forma.</li>
-        <li><strong>xlsx, exceljs, jszip</strong> për import/export Excel dhe ZIP.</li>
-        <li><strong>lucide-react</strong> për ikona.</li>
-        <li><strong>victory</strong> për grafikë dhe analizë vizuale.</li>
-      </ul>
-    </section>
-
-    <section class="section" id="arkitektura">
-      <h2>6. Arkitektura e sistemit</h2>
-      <p>
-        Aplikacioni nis nga <code>App.tsx</code>, ku vendosen provider-at globalë: <code>ThemeProvider</code>,
-        <code>AuthProvider</code> dhe <code>ToastProvider</code>. Route-t kryesore mbrohen me <code>ProtectedRoute</code>.
-      </p>
-      <p>
-        Struktura ndahet në katër shtresa kryesore: prezantimi (faqet dhe komponentët), logjika e biznesit
-        (services dhe lib), gjendja globale (context) dhe shtresa e të dhënave (Supabase / PostgreSQL).
-      </p>
-      <div class="figure">
-        <div class="figure-title">Figura 1. Shpërndarja e moduleve në repository</div>
-        <svg viewBox="0 0 760 240" width="100%" height="240" role="img" aria-label="Grafik me module të repository-it">
-          <defs>
-            <linearGradient id="barGradient" x1="0" x2="1">
-              <stop offset="0%" stop-color="#0f4c81" />
-              <stop offset="100%" stop-color="#2d7cc0" />
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width="760" height="240" rx="16" fill="#f8fbff" stroke="#dbe3ea" />
-          <line x1="70" y1="200" x2="710" y2="200" stroke="#cfd8e3" stroke-width="2" />
-          <line x1="70" y1="42" x2="70" y2="200" stroke="#cfd8e3" stroke-width="2" />
-
-          <rect x="100" y="62" width="88" height="138" rx="10" fill="url(#barGradient)" />
-          <rect x="240" y="36" width="88" height="164" rx="10" fill="url(#barGradient)" />
-          <rect x="380" y="48" width="88" height="152" rx="10" fill="url(#barGradient)" />
-          <rect x="520" y="50" width="88" height="150" rx="10" fill="url(#barGradient)" />
-          <rect x="660" y="66" width="48" height="134" rx="10" fill="url(#barGradient)" />
-
-          <text x="144" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Faqe</text>
-          <text x="284" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Komponentë</text>
-          <text x="424" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Services</text>
-          <text x="564" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">Lib</text>
-          <text x="684" y="222" text-anchor="middle" fill="#17324d" font-size="13" font-weight="700">DB</text>
-
-          <text x="144" y="54" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">7</text>
-          <text x="284" y="28" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">13</text>
-          <text x="424" y="40" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">9</text>
-          <text x="564" y="42" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">9</text>
-          <text x="684" y="58" text-anchor="middle" fill="#0f4c81" font-size="18" font-weight="800">5</text>
-        </svg>
-        <div class="figure-caption">
-          Grafiku tregon numrin e moduleve kryesore të identifikuara në repository: 7 faqe, 13 komponentë, 9 shërbime,
-          9 skedarë në lib dhe 5 tabela kryesore në databazë.
-        </div>
-      </div>
-
-      <div class="stats-grid" aria-label="Statistika të projektit">
-        <div class="stat-card"><span class="stat-num">7</span><span class="stat-label">faqe kryesore</span></div>
-        <div class="stat-card"><span class="stat-num">13</span><span class="stat-label">komponentë të përbashkët</span></div>
-        <div class="stat-card"><span class="stat-num">9</span><span class="stat-label">shërbime biznesi</span></div>
-        <div class="stat-card"><span class="stat-num">9</span><span class="stat-label">modulë / utilitarë në lib</span></div>
-        <div class="stat-card"><span class="stat-num">5</span><span class="stat-label">tabela kryesore të databazës</span></div>
-      </div>
-    </section>
-
-    <section class="section" id="figure-rrjedha">
-      <h2>6.1 Figura e rrjedhës së të dhënave</h2>
-      <p>
-        Më poshtë paraqitet rrjedha bazë e sistemit: input-i vjen nga përdoruesi ose Excel-i, kalon në validim,
-        pastaj ruhet në Supabase dhe në fund shfaqet në dashboard / preview / eksport.
-      </p>
-      <div class="figure">
-        <div class="flow">
-          <div class="flow-item">
-            <span class="flow-kicker">Hapi 1</span>
-            <span class="flow-title">Përdoruesi</span>
-            <span class="flow-desc">Fut të dhëna manualisht ose ngarkon Excel.</span>
-          </div>
-          <div class="flow-item">
-            <span class="flow-kicker">Hapi 2</span>
-            <span class="flow-title">Validimi</span>
-            <span class="flow-desc">Kontrollohen fushat, çmimet dhe struktura.</span>
-          </div>
-          <div class="flow-item">
-            <span class="flow-kicker">Hapi 3</span>
-            <span class="flow-title">Supabase</span>
-            <span class="flow-desc">Ruajtja e të dhënave, auth dhe historiku.</span>
-          </div>
-          <div class="flow-item">
-            <span class="flow-kicker">Hapi 4</span>
-            <span class="flow-title">Output</span>
-            <span class="flow-desc">Dashboard, preview, export Excel/ZIP/JSON.</span>
-          </div>
-        </div>
-        <div class="figure-caption">
-          Figura 2. Rrjedha bazë e të dhënave dhe procesit në aplikacion.
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="vleresimi">
-      <h2>7.1 Si bëhet vlerësimi i ofertës</h2>
-      <p>
-        Vlerësimi i ofertës ndërtohet nga kostoja e materialit, puna, ushqimi, transporti dhe shpenzimet e tjera.
-        Mbi koston bazë aplikohen përqindja e fitimit dhe TVSH-ja. Kjo e bën të mundur që përdoruesi të shohë jo vetëm
-        totalin, por edhe komponentët që e krijojnë çmimin final.
-      </p>
-      <div class="note">
-        <strong>Formula bazë:</strong> Kostoja bazë = materiali + puna + ushqimi + transporti + shpenzimet e tjera.
-        Çmimi i ofertës krijohet pasi aplikohen fitimi dhe TVSH-ja.
-      </div>
-      <ul>
-        <li><strong>Kostoja e planifikuar</strong>: shpenzimet e parashikuara para ose gjatë ofertimit.</li>
-        <li><strong>Çmimi i ofertës</strong>: vlera që i ofrohet klientit pas fitimit dhe TVSH-së.</li>
-        <li><strong>Kostoja reale</strong>: shpenzimi final pasi projekti ka përfunduar.</li>
-      </ul>
-      <p>
-        Përmes këtij dallimi, sistemi mund të krahasojë parashikimin me rezultatin real dhe të tregojë nëse oferta ka
-        qenë e nënvlerësuar ose nëse projekti ka përfunduar me kosto më të ulët se pritjet.
-      </p>
-    </section>
-
-    <section class="section" id="funksionalitetet">
-      <h2>7. Funksionalitetet kryesore</h2>
-      <ul>
-        <li>Dashboard me statistika, projekte referencë dhe grafikë analitike.</li>
-        <li>Regjistrim manual i pozicioneve me kalkulim të detajuar të kostove.</li>
-        <li>Import Excel dhe preview para eksportit final.</li>
-        <li>Gjenerim i Librit Ndërtimor në Excel dhe ZIP.</li>
-        <li>Krijim i faturave në dy modele të ndryshme.</li>
-        <li>Kërkim global në pozicione, projekte dhe kategori.</li>
-        <li>Menaxhim i të dhënave, editim, fshirje dhe analizë krahasuese.</li>
-        <li>Autentikim, ndryshim password-i dhe backup JSON.</li>
-      </ul>
-    </section>
-
-    <section class="section" id="teDhenat">
-      <h2>8. Të dhënat dhe skema</h2>
-      <p>Databaza dhe migration-i i sigurisë dokumentohen në <code>supabase/user-approval.sql</code> dhe përdorin tabelat:</p>
-      <ul>
-        <li><code>categories</code></li>
-        <li><code>projects</code></li>
-        <li><code>project_items</code></li>
-        <li><code>item_expenses</code></li>
-        <li><code>price_history</code>, <code>libri_exports</code> dhe <code>profiles</code></li>
-      </ul>
-      <p>
-        Në logjikën e aplikacionit përdoren edhe funksione për historikun e çmimeve dhe eksportet e ruajtura.
-        Kjo e bën sistemin më të përshtatshëm për analizë dhe raportim.
-      </p>
-      <h3>Të dhënat kryesore</h3>
-      <ul>
-        <li><strong>Projektet</strong>: emri, klienti, statusi, përshkrimi, kosto reale, shënime.</li>
-        <li><strong>Kategoritë</strong>: emri dhe përshkrimi.</li>
-        <li><strong>Pozicionet</strong>: numër pozicioni, përshkrim, njësi, sasi, çmim dhe total.</li>
-        <li><strong>Shpenzimet e detajuara</strong>: material, punë, ushqim, transport dhe të tjera.</li>
-        <li><strong>Historiku i importeve</strong>: <code>import_history</code> është legacy dhe nuk përdoret aktualisht; historiku aktiv i Librave është në <code>libri_exports</code>.</li>
-        <li><strong>Eksportet</strong>: Libri Ndërtimor, CSV dhe JSON backup.</li>
-      </ul>
-    </section>
-
-    <section class="section" id="faqet">
-      <h2>9. Faqet e aplikacionit</h2>
-      <h3>Faqja kryesore</h3>
-      <p>Shfaq statistika, statuset e projekteve, grafikë analitike dhe përmbledhje të Librave Ndërtimor sipas vlerës, faqeve dhe pozicioneve.</p>
-      <h3>Faqja e regjistrimit</h3>
-      <p>Lejon futje manuale të pozicioneve dhe llogaritje të detajuara të kostove.</p>
-      <h3>Faqja e faturës</h3>
-      <p>Gjeneron fatura sipas modeleve të kontratës ose pozicioneve.</p>
-      <h3>Faqja e importit</h3>
-      <p>Lexon Excel, bën preview dhe eksport final të Librit Ndërtimor.</p>
-      <h3>Faqja e të dhënave</h3>
-      <p>Lejon editim, fshirje, krahasim dhe analizë të të dhënave.</p>
-      <h3>Faqja e kërkimit</h3>
-      <p>Ofron kërkim global në përshkrime, numra pozicionesh dhe projekte.</p>
-      <h3>Faqja e profilit</h3>
-      <p>Menaxhon llogarinë, ndryshimin e password-it, backup-in JSON, statusin e profilit dhe approval workflow për përdoruesit.</p>
-    </section>
-
-    <section class="section" id="funksione">
-      <h2>10. Funksionet kryesore teknike</h2>
-      <ul>
-        <li><code>calculatePositionPrice</code> për llogaritje çmimi.</li>
-        <li><code>validateKontrate</code> dhe <code>validatePozicione</code> për faturat.</li>
-        <li><code>parseExcelWithValidation</code> për lexim dhe validim të Excel-it.</li>
-        <li><code>planLibriExport</code> dhe <code>buildLibriNdertimorWorkbook</code> për eksportin final.</li>
-        <li><code>exportProjectCSV</code> dhe <code>exportAllDataJson</code> për eksportet shtesë.</li>
-        <li><code>fetchDashboardStats</code>, <code>fetchProjectSummaries</code> dhe <code>fetchPriceTrend</code> për analiza.</li>
-        <li><code>signIn</code>, <code>signUp</code>, <code>resetPassword</code> dhe <code>changePassword</code> për auth.</li>
-      </ul>
-    </section>
-
-    <section class="section" id="testimi">
-      <h2>11. Testimi dhe vlerësimi</h2>
-      <p>
-        Testimi duhet të fokusohet në saktësinë e llogaritjeve, importin korrekt të Excel-it, gjenerimin e saktë të
-        Librit Ndërtimor, kërkimin global, editimin e të dhënave dhe funksionimin e autentikimit.
-      </p>
-      <p>
-        Për këtë projekt është e rëndësishme të testohen edhe shembujt realë të ruajtur në folderët
-        <code>Fatura</code> dhe <code>Paramasa</code>, sepse ato përfaqësojnë mënyrën reale të përdorimit.
-      </p>
-    </section>
-
-    <section class="section" id="mbrojtja">
-      <h2>11.1 Çfarë duhet të kuptohet për mbrojtjen</h2>
-      <p>
-        Gjatë mbrojtjes është më e rëndësishme të shpjegohet rrjedha e sistemit dhe arsyeja e vendimeve teknike,
-        jo të memorizohet çdo rresht i kodit.
-      </p>
-      <ol>
-        <li><strong>Problemi:</strong> të dhënat dhe ofertat ishin të shpërndara në Excel dhe dokumente manuale.</li>
-        <li><strong>Zgjidhja:</strong> sistemi centralizon projektet, kategoritë, pozicionet dhe shpenzimet.</li>
-        <li><strong>Rrjedha:</strong> të dhënat futen ose importohen, validohen, ruhen dhe shfaqen në preview ose eksport.</li>
-        <li><strong>Databaza:</strong> projektet ruhen në <code>projects</code>, pozicionet në <code>project_items</code> dhe kostot në <code>item_expenses</code>.</li>
-        <li><strong>Teknologjitë:</strong> React për ndërfaqen, TypeScript për tipizim, Supabase për databazën dhe xlsx/exceljs për dokumentet.</li>
-        <li><strong>Kufizimet:</strong> Excel-i duhet të ketë strukturë të lexueshme dhe kostoja reale duhet të plotësohet pas përfundimit të projektit.</li>
-      </ol>
-    </section>
-
-    <section class="section" id="screenshots">
-      <h2>12. Screenshot / Figura</h2>
-      <p>
-        Kjo pjesë është e menduar për figurat reale të aplikacionit. Më poshtë janë placeholder-at që mund t’i
-        zëvendësosh me screenshot-e nga versioni final i projektit.
-      </p>
-      <div class="screenshot-grid">
-        <div class="shot-card">
-          <div class="shot-preview">Shto screenshot të dashboard-it</div>
-          <div class="shot-meta">
-            <span class="shot-title">Figura 3. Ballina / Dashboard</span>
-            <span class="shot-desc">Statistika, grafikë dhe projektet referencë.</span>
-          </div>
-        </div>
-        <div class="shot-card">
-          <div class="shot-preview">Shto screenshot të regjistrimit</div>
-          <div class="shot-meta">
-            <span class="shot-title">Figura 4. Regjistrimi i pozicioneve</span>
-            <span class="shot-desc">Forma me llogaritje të kostove dhe preview të çmimit.</span>
-          </div>
-        </div>
-        <div class="shot-card">
-          <div class="shot-preview">Shto screenshot të importit / preview</div>
-          <div class="shot-meta">
-            <span class="shot-title">Figura 5. Import Excel dhe preview</span>
-            <span class="shot-desc">Leximi i skedarit, validimi dhe gjenerimi i Librit Ndërtimor.</span>
-          </div>
-        </div>
-        <div class="shot-card">
-          <div class="shot-preview">Shto screenshot të të dhënave</div>
-          <div class="shot-meta">
-            <span class="shot-title">Figura 6. Faqja e të dhënave</span>
-            <span class="shot-desc">Editimi, krahasimi, historiku i çmimeve dhe analizat.</span>
-          </div>
-        </div>
-      </div>
-      <div class="figure-caption">
-        Për dorëzim final, zëvendëso placeholder-at me screenshot-e reale të marra nga aplikacioni.
-      </div>
-    </section>
-
-    <section class="section" id="perditesimet">
-      <h2>14. Përditësimet e implementuara deri më 12.10.2026</h2>
-      <ul>
-        <li>Dashboard i Librave Ndërtimor me vlerë totale, vlerë mesatare, Top 5 sipas vlerës, faqe dhe pozicione.</li>
-        <li>Pagination për historikun e Librave me pesë libra për faqe dhe invalidim cache pas ruajtjes/fshirjes.</li>
-        <li>Cache në memory për kategoritë dhe historikun e Librave me TTL të kontrolluar.</li>
-        <li>Regjistrim me status <code>pending</code>, aprovim/refuzim/pezullim nga administratori dhe statistika në profil.</li>
-        <li>Njoftim i aprovimit vetëm një herë në aplikacion përmes <code>approval_notice_seen_at</code>; nuk përdoren email-e të dyta për approve/reject.</li>
-        <li>Timeout automatik pas 60 minutash pa aktivitet dhe kufizim lokal prej pesë tentativash të pasuksesshme ditore.</li>
-        <li>Loading screen me logo, glassmorphism, dual-ring, glow dhe progress shimmer, si dhe faqe 404.</li>
-        <li>Faqe e veçantë About Us, responsive design, PWA manifest dhe përdorim i logos reale të Megrant ING.</li>
-      </ul>
-    </section>
-
-    <section class="section" id="siguria">
-      <h2>15. Siguria, validimet dhe kufizimet</h2>
-      <p>Projekti ka bazë të mirë sigurie për përdorim të kontrolluar familjar/biznesor, por nuk duhet të paraqitet si sistem enterprise pa përmirësime shtesë.</p>
-      <ul>
-        <li>Supabase Auth ruan password-et dhe menaxhon session-in; aplikacioni nuk ruan password në tabelat e veta.</li>
-        <li>RLS kufizon tabelat operative për profile të aprovuara dhe profilet pending/rejected nuk lejohen në aplikacion.</li>
-        <li>Funksionet e brendshme administrative mbrohen me <code>SECURITY DEFINER</code>, schema private dhe privilegje të kufizuara.</li>
-        <li>Rate limit-i prej pesë tentativash në ditë është kryesisht mbrojtje në browser dhe mund të anashkalohet me pastrim të localStorage; rate limiting server-side rekomandohet për prodhim.</li>
-        <li>Roli <code>viewer</code> ekziston, por politikat aktuale ende nuk e kufizojnë në read-only; përdoruesit e aprovuar kanë qasje operative sipas RLS aktual.</li>
-        <li>Backup JSON mund të përmbajë të dhëna financiare dhe duhet të ruhet në pajisje të besueshme.</li>
-        <li>Mungojnë ende MFA/2FA, audit log i plotë dhe testime automatike end-to-end.</li>
-      </ul>
-      <p>Rekomandohen role të ndara me RLS, rate limiting server-side, MFA, audit log, backup i enkriptuar dhe monitorim i gabimeve.</p>
-    </section>
-
-    <section class="section" id="perparesite">
-      <h2>16. Përparësitë dhe zhvillimi i mëtejshëm</h2>
-      <ul>
-        <li>Centralizon të gjitha të dhënat në një sistem të vetëm.</li>
-        <li>Automatizon llogaritjet dhe eksportet.</li>
-        <li>Ofron kërkim, analizë dhe histori të të dhënave.</li>
-        <li>Ka arkitekturë të ndarë dhe të lexueshme.</li>
-        <li>Është i përshtatshëm për përdorim real në ndërtim.</li>
-      </ul>
-      <p>Si zhvillim i mëtejshëm mund të shtohen: PDF më i avancuar, role përdoruesish, raporte grafike shtesë dhe integrim me module financiare.</p>
-    </section>
-
-    <section class="section" id="referencat">
-      <h2>17. Referencat</h2>
-      <ol>
-        <li>React Documentation – https://react.dev</li>
-        <li>TypeScript Documentation – https://www.typescriptlang.org/docs/</li>
-        <li>Vite Documentation – https://vite.dev</li>
-        <li>React Router Documentation – https://reactrouter.com</li>
-        <li>Supabase Documentation – https://supabase.com/docs</li>
-        <li>react-hook-form Documentation – https://react-hook-form.com</li>
-        <li>ExcelJS Documentation – https://github.com/exceljs/exceljs</li>
-        <li>SheetJS / xlsx Documentation – https://docs.sheetjs.com</li>
-        <li>Victory Documentation – https://commerce.nearform.com/open-source/victory/</li>
-      </ol>
-    </section>
-
-    <section class="section" id="burimet">
-      <h2>18. Burimet reale nga repository</h2>
-      <ul>
-        <li><code>App.tsx</code> për route-t dhe provider-at globalë.</li>
-        <li><code>README.md</code> për përshkrimin bazë të projektit.</li>
-        <li><code>supabase/user-approval.sql</code> për profilet, approval workflow dhe RLS.</li>
-        <li><code>src/pages</code> për të gjitha faqet kryesore.</li>
-        <li><code>src/services</code> për logjikën e biznesit, eksportet dhe analizat.</li>
-        <li><code>src/lib</code> për validim, kalkulim dhe eksport dokumentesh.</li>
-        <li><code>Fatura</code> dhe <code>Paramasa</code> për materialet shembull dhe shabllonet praktike.</li>
-      </ul>
-      <div class="note">
-        Në versionin final, kjo temë duket më e fortë kur tregon qartë që është ndërtuar mbi funksionet dhe të dhënat
-        reale të repository-t, jo vetëm si përshkrim teorik.
-      </div>
-    </section>
-
-    <div class="footer">
-      Dokument i përgatitur për temë diplome. Për versionin final shto faqen e titullit, logon e institucionit,
-      përmbajtjen automatike dhe screenshot-e nga aplikacioni.
+<main>
+  <header class="cover">
+    <div class="institution">[UNIVERSITETI]<br>[FAKULTETI]<br>[DEPARTAMENTI / PROGRAMI]</div>
+    <hr class="cover-rule">
+    <div class="degree">Punim diplome bachelor · Draft për shqyrtim</div>
+    <h1>Zhvillim i Sistemit për Vlerësimin e Ofertave dhe Menaxhimin e të Dhënave në Projekte</h1>
+    <p>Programi i studimit: [Programi i studimit]</p>
+    <div class="cover-meta">
+      <p><strong>Kandidati:</strong> [Emri dhe mbiemri]</p>
+      <p><strong>Numri i indeksit:</strong> [Numri i indeksit]</p>
+      <p><strong>Mentori:</strong> [Titulli dhe emri i mentorit]</p>
+      <p><strong>Viti akademik:</strong> [Viti akademik]</p>
     </div>
-  </div>
+    <div class="draft-mark">Dokument pune për konsultim akademik; plotësoni të dhënat institucionale para dërgimit.</div>
+  </header>
+
+  <section class="sheet">
+    <h2>Abstrakt</h2>
+    <div class="abstract">
+      <p>Ky punim trajton projektimin dhe zhvillimin e një aplikacioni web për vlerësimin e ofertave dhe menaxhimin e të dhënave në projekte ndërtimore. Qëllimi është të centralizohen të dhënat e projekteve dhe pozicioneve të punës, të standardizohen llogaritjet e kostos dhe të lehtësohet përpunimi i dokumenteve që përdoren gjatë përgatitjes dhe përcjelljes së ofertave.</p>
+      <p>Aplikacioni mbështet regjistrimin e pozicioneve me kosto të ndara, organizimin sipas projekteve dhe kategorive, kërkimin dhe krahasimin e të dhënave, importimin e paramasave nga Excel dhe gjenerimin e dokumenteve Excel për Librin Ndërtimor dhe faturat. Për llogaritjet përdoret një modul i përbashkët i çmimeve; të dhënat operative ruhen në Supabase, ndërsa eksportet dhe preview realizohen në shfletues.</p>
+      <p>Zgjidhja është implementuar me React, TypeScript dhe Vite, me Supabase për autentikim dhe databazë PostgreSQL. Testet automatike mbulojnë logjikën e çmimeve dhe planifikimit të faqeve, ndërsa build-i verifikon tipet dhe paketimin e aplikacionit. Testimi aktual nuk përbën ende vlerësim të plotë të përdorshmërisë me pjesëmarrës ose testim integrimi në një databazë të vendosur.</p>
+    </div>
+    <p class="keywords"><strong>Fjalë kyçe:</strong> vlerësim ofertash, menaxhim projektesh, paramasë, Libër Ndërtimor, Excel, React, TypeScript, Supabase.</p>
+    <h2>Abstract</h2>
+    <div class="abstract">
+      <p>This thesis presents the design and development of a web application for estimating project offers and managing construction-project data. The application centralizes projects and work items, calculates item costs using a shared pricing module, supports Excel-based quantity-survey imports, and generates Excel documents for construction books and invoices. It is implemented with React, TypeScript, Vite, and Supabase. Automated tests cover core pricing and page-planning logic; production database integration and formal usability evaluation remain outside the current verification scope.</p>
+    </div>
+    <p class="keywords"><strong>Keywords:</strong> offer estimation, project management, bill of quantities, construction book, Excel, React, TypeScript, Supabase.</p>
+  </section>
+
+  <nav class="sheet toc" aria-label="Përmbajtja">
+    <h2>Përmbajtja</h2>
+    <ol>
+      <li><a href="#hyrje">Hyrje</a></li>
+      <li><a href="#problemi">Problemi dhe motivimi</a></li>
+      <li><a href="#qellimi">Qëllimi dhe objektivat</a></li>
+      <li><a href="#metodologjia">Metodologjia dhe kërkesat</a></li>
+      <li><a href="#teknologjite">Teknologjitë</a></li>
+      <li><a href="#arkitektura">Arkitektura dhe modeli i të dhënave</a></li>
+      <li><a href="#llogaritja">Llogaritja e ofertës</a></li>
+      <li><a href="#funksionalitetet">Funksionalitetet dhe rrjedhat</a></li>
+      <li><a href="#siguria">Siguria dhe integriteti i të dhënave</a></li>
+      <li><a href="#testimi">Testimi dhe rezultatet</a></li>
+      <li><a href="#kufizimet">Kufizimet dhe puna e ardhshme</a></li>
+      <li><a href="#perfundimi">Përfundimi</a></li>
+      <li><a href="#referencat">Referencat</a></li>
+    </ol>
+  </nav>
+
+  <section class="sheet" id="hyrje">
+    <h2>1. Hyrje</h2>
+    <p>Projektet ndërtimore kërkojnë përpunim të vazhdueshëm të pozicioneve të punës, sasive, njësive matëse, kostove dhe dokumenteve përcjellëse. Kur këto të dhëna ruhen në shumë skedarë të pavarur, përsëritja e tyre dhe përditësimi manual e bëjnë më të vështirë kontrollin e versioneve, krahasimin e ofertave dhe ripërdorimin e informatave nga projektet e mëparshme.</p>
+    <p>Ky projekt zhvillon një aplikacion web që i organizon të dhënat në një vend dhe automatizon disa hapa të përsëritur. Sistemi nuk zëvendëson gjykimin profesional për çmimet ose interpretimin e dokumenteve; ai ofron mjete për llogaritje, ruajtje, kërkim, krahasim dhe përgatitje të dokumenteve.</p>
+    <p>Objekti i punimit është aplikacioni i realizuar në repository-n e projektit dhe logjika e tij e implementuar. Pretendimet për kursim kohe ose ndikim në vendimmarrje duhet të maten veçmas, me testim të përdoruesve dhe të dhëna të përshtatshme.</p>
+  </section>
+
+  <section class="sheet" id="problemi">
+    <h2>2. Problemi dhe motivimi</h2>
+    <p>Proceset manuale të ofertimit mund të sjellin mospërputhje ndërmjet sasive, kostove dhe dokumenteve të gjeneruara. Informacioni i shpërndarë gjithashtu vështirëson gjetjen e një pozicioni të ngjashëm, shqyrtimin e çmimit historik dhe krahasimin e projekteve.</p>
+    <p>Problemi inxhinierik i trajtuar është si të ndërtohet një aplikacion që:</p>
+    <ul>
+      <li>ruan projektet, kategoritë, pozicionet dhe shpenzimet e lidhura në një model të organizuar;</li>
+      <li>llogarit në mënyrë të përsëritshme vlerën e ofertës nga komponentët e kostos;</li>
+      <li>pranon burime Excel dhe i shfaq rezultatet për kontroll para eksportit;</li>
+      <li>përshtat pozicionet me strukturën e shablloneve të dokumenteve;</li>
+      <li>lejon kërkim, krahasim dhe analizë të historikut, duke dalluar vlerën e ofertuar nga kostoja reale.</li>
+    </ul>
+  </section>
+
+  <section class="sheet" id="qellimi">
+    <h2>3. Qëllimi dhe objektivat</h2>
+    <p>Qëllimi është zhvillimi i një sistemi web për regjistrimin, vlerësimin dhe analizën e të dhënave të ofertave në projekte, si dhe për përgatitjen e dokumenteve të strukturuara.</p>
+    <h3>Objektivat specifike</h3>
+    <ol>
+      <li>Të ndërtohet ndërfaqe për regjistrimin dhe menaxhimin e projekteve e pozicioneve.</li>
+      <li>Të implementohet logjikë e përbashkët për koston, fitimin, TVSH-në dhe çmimin për njësi.</li>
+      <li>Të mundësohet importi dhe validimi i paramasave nga skedarët Excel.</li>
+      <li>Të krijohet preview dhe planifikim automatik ose manual i faqeve të Librit Ndërtimor.</li>
+      <li>Të gjenerohen dokumente Excel sipas shablloneve ekzistuese.</li>
+      <li>Të ofrohen kërkim, krahasim i pozicioneve, historik çmimesh dhe përmbledhje financiare.</li>
+      <li>Të verifikohet logjika kryesore me teste automatike dhe build të projektit.</li>
+    </ol>
+  </section>
+
+  <section class="sheet" id="metodologjia">
+    <h2>4. Metodologjia dhe kërkesat</h2>
+    <p>Zhvillimi është kryer si punë praktike e inxhinierisë softuerike: identifikim i rrjedhave të nevojshme, organizim i aplikacionit në faqe dhe module, implementim i logjikës, integrim me shërbimin e databazës dhe verifikim me teste e build. Skedarët e shablloneve Excel shërbejnë si burim për strukturën e dokumenteve të gjeneruara.</p>
+    <p>Në këtë draft nuk pretendohet se është kryer studim formal i përdorshmërisë, eksperiment me përdorues, apo krahasim sasior para/pas. Këto mund të shtohen në fazën e ardhshme me metodë, pjesëmarrës, detyra dhe matje të dokumentuara.</p>
+    <h3>Kërkesa funksionale</h3>
+    <ul>
+      <li>Regjistrimi, përditësimi dhe fshirja e projekteve dhe pozicioneve.</li>
+      <li>Regjistrimi i kostove të pozicionit sipas llojit dhe lidhja e tyre me projektin.</li>
+      <li>Importimi i Excel-it, verifikimi i totalit të deklaruar dhe rregullimi i metadata-s.</li>
+      <li>Gjenerimi i Librit Ndërtimor, faturës kontraktuale dhe fletë-dërgesës.</li>
+      <li>Kërkimi sipas përshkrimit, numrit të pozicionit, projektit ose kategorisë.</li>
+      <li>Shikimi i krahasimeve, trendeve dhe përmbledhjeve të ofertës.</li>
+      <li>Eksportimi i të dhënave operative në JSON.</li>
+    </ul>
+    <h3>Kërkesa jofunksionale</h3>
+    <ul>
+      <li>Ndërfaqe e përdorshme në ekranet e zakonshme dhe e përshtatshme për printim.</li>
+      <li>Tipizim në TypeScript dhe ndarje e llogaritjeve nga paraqitja.</li>
+      <li>Ruajtje e qëndrueshme e të dhënave dhe raportim i gabimeve të rëndësishme.</li>
+      <li>Kontroll i qasjes i konfiguruar në shërbimin e databazës para përdorimit real.</li>
+    </ul>
+  </section>
+
+  <section class="sheet" id="teknologjite">
+    <h2>5. Teknologjitë e përdorura</h2>
+    <table>
+      <thead><tr><th>Teknologjia</th><th>Roli në sistem</th></tr></thead>
+      <tbody>
+        <tr><td>React 18</td><td>Ndërfaqja dhe komponentët e ripërdorshëm.</td></tr>
+        <tr><td>TypeScript</td><td>Tipizimi i modeleve dhe logjikës së aplikacionit.</td></tr>
+        <tr><td>Vite</td><td>Serveri i zhvillimit dhe build-i për publikim.</td></tr>
+        <tr><td>React Router</td><td>Navigimi ndërmjet faqeve të aplikacionit.</td></tr>
+        <tr><td>Supabase / PostgreSQL</td><td>Autentikimi dhe ruajtja e të dhënave përmes klientit Supabase.</td></tr>
+        <tr><td>ExcelJS, xlsx, JSZip</td><td>Leximi, mbushja dhe paketimi i dokumenteve Excel/ZIP.</td></tr>
+        <tr><td>React Hook Form</td><td>Menaxhimi i formave të regjistrimit dhe profilit.</td></tr>
+        <tr><td>Vitest</td><td>Testimi i logjikës së çmimeve dhe planifikimit të faqeve.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="sheet" id="arkitektura">
+    <h2>6. Arkitektura dhe modeli i të dhënave</h2>
+    <p>Aplikacioni është një SPA (Single-Page Application). Rrugët dhe faqet paraqesin funksionet, komponentët e përbashkët paraqesin kontrollet e UI-së, modulet në <code>src/lib</code> mbajnë llogaritje dhe përpunim të dokumenteve, ndërsa <code>src/services</code> izolon pjesën më të madhe të ndërveprimit me Supabase.</p>
+    <div class="figure">
+      <div class="flow">
+        <div class="node">Përdoruesi<br>faqet React</div><span class="arrow">→</span>
+        <div class="node">Logjika e domenit<br>pricing · Excel · validim</div><span class="arrow">→</span>
+        <div class="node">Shërbimet<br>src/services</div><span class="arrow">→</span>
+        <div class="node">Supabase<br>PostgreSQL / Auth</div>
+      </div>
+      <p class="caption">Figura 1. Pamje konceptuale e shtresave dhe rrjedhës së të dhënave.</p>
+    </div>
+    <h3>Entitetet kryesore</h3>
+    <table>
+      <thead><tr><th>Entiteti</th><th>Përmbajtja dhe lidhja</th></tr></thead>
+      <tbody>
+        <tr><td>projects</td><td>Projekti, klienti, statusi dhe, kur plotësohet, kostoja reale pas përfundimit.</td></tr>
+        <tr><td>categories</td><td>Klasifikimi i pozicioneve.</td></tr>
+        <tr><td>project_items</td><td>Përshkrimi, njësia, sasia, çmimi për njësi, totali dhe normat e fitimit/TVSH-së.</td></tr>
+        <tr><td>item_expenses</td><td>Komponentët e kostos të lidhur me pozicionin, si materiali, puna, ushqimi, transporti dhe shpenzimet tjera.</td></tr>
+        <tr><td>price_history</td><td>Pamje historike të çmimeve të regjistruara gjatë krijimit ose ndryshimit të pozicionit.</td></tr>
+        <tr><td>libri_exports</td><td>Metadata dhe rreshtat e paramasave të importuara për shikim ose rigjenerim të dokumentit.</td></tr>
+        <tr><td>profiles</td><td>Të dhëna të profilit dhe gjendja/roli i përdoruesit, të lidhura me autentikimin.</td></tr>
+      </tbody>
+    </table>
+    <p>Për ruajtjen e pozicioneve, migrimi i shtuar krijon kolonat e normave të fitimit dhe TVSH-së dhe funksione databaze që ruajnë pozicionin me shpenzimet përkatëse në një transaksion. Migrimi duhet zbatuar në projektin Supabase para se versioni i ri i aplikacionit të përdoret me databazën.</p>
+  </section>
+
+  <section class="sheet" id="llogaritja">
+    <h2>7. Llogaritja e ofertës</h2>
+    <p>Llogaritja qendrore realizohet në funksionin <code>calculatePositionPrice</code>. Materiali dhe puna shumëzohen me sasinë; ushqimi dhe transporti shumëzohen me ditët; shpenzimet tjera trajtohen si shumë fikse për pozicionin.</p>
+    <pre>Kosto materiali = sasia × çmimi i materialit për njësi
+Kosto pune      = sasia × çmimi i punës për njësi
+Ushqim          = ditët × çmimi ditor i ushqimit
+Transport       = ditët × çmimi ditor i transportit
+Nëntotali       = shuma e kostove të mësipërme + shpenzimet fikse
+Fitimi          = nëntotali × norma e fitimit
+Baza e TVSH-së  = nëntotali + fitimi
+Totali          = baza e TVSH-së + TVSH
+Çmimi për njësi = totali ÷ sasia (kur sasia > 0)</pre>
+    <p>Për krahasimin e fitimit, vlera e ofertës kthehet në vlerë pa TVSH: <code>vlera pa TVSH = totali bruto ÷ (1 + norma e TVSH-së / 100)</code>. Kjo vlerë krahasohet me kostot e planifikuara ose me koston reale të shënuar për projektin. Përqindja e paraqitur në analizë është fitimi ndaj kostos (markup), jo përqindja e fitimit ndaj shitjes.</p>
+    <div class="note"><strong>Shembull:</strong> Nëse totali me TVSH 18% është 118 €, vlera pa TVSH është 100 €. Nëse kostot janë 80 €, fitimi i llogaritur është 20 €, ose 25% mbi koston. TVSH-ja nuk trajtohet si fitim.</div>
+  </section>
+
+  <section class="sheet" id="funksionalitetet">
+    <h2>8. Funksionalitetet dhe rrjedhat</h2>
+    <h3>8.1 Regjistrimi dhe analiza e ofertës</h3>
+    <p>Përdoruesi zgjedh projektin dhe kategorinë ekzistuese ose krijon të reja, plotëson pozicionin dhe kostot, sheh preview të formulës dhe ruan të dhënat. Funksioni i databazës <code>save_register_position</code> krijon entitetet e reja kur nevojitet dhe fut pozicionin me shpenzimet në të njëjtin transaksion.</p>
+    <h3>8.2 Menaxhimi, krahasimi dhe historiku</h3>
+    <p>Faqja e të dhënave paraqet pozicionet sipas projektit ose kategorisë, ofron redaktim dhe fshirje, krahasim të çmimeve dhe pamje të historikut. Trendi mujor paraqet vlerën aktuale të ofertave për gjashtë muajt kalendarikë të fundit, të grupuar sipas muajit të krijimit të projektit dhe me mundësi filtrimi sipas statusit. Ai nuk paraqet pagesa të pranuara ose fitim; nëse pozicionet ndryshojnë më vonë, totali aktual shfaqet te muaji i krijimit të projektit. Gjatë redaktimit, funksioni <code>update_project_position</code> ndryshon pozicionin dhe zëvendëson listën e shpenzimeve atomikisht. Normat ruhen me pozicionin, prandaj një redaktim pa ndryshime nuk duhet të ndryshojë totalin.</p>
+    <h3>8.3 Importi dhe Libri Ndërtimor</h3>
+    <p>Parseri identifikon rreshtat e pozicioneve në skedarët Excel, lexon formatin tabelor dhe formatin e Librit Ndërtimor dhe kontrollon, kur ekziston, totalin e deklaruar në dokument. Pozicionet grupohen sipas seksionit dhe paketohen në faqe sipas kapacitetit të shablloneve. Preview mundëson rishikim dhe grupim manual; ndarja e zgjedhur ruhet me regjistrin e importit dhe përdoret kur libri rishikohet ose shkarkohet përsëri. Eksporti krijon skedar Excel të bashkuar ose ZIP me faqe të ndara.</p>
+    <h3>8.4 Faturat</h3>
+    <p>Faqja e faturave mbush shabllonin e kontratës me të dhënat e lëshuesit, klientit, kontratës dhe shumës, ose gjeneron fletë-dërgesë me rreshta artikujsh. Fushat validohen para krijimit të workbook-ut. Përdoruesi duhet ta kontrollojë dokumentin e gjeneruar përputhshëm me kërkesat e kontratës dhe kontabilitetit.</p>
+    <h3>8.5 Kërkimi dhe backup-i</h3>
+    <p>Kërkimi global mbulon përshkrimin, numrin e pozicionit, emrin e projektit dhe kategorinë. Backup-i JSON përfshin projektet, kategoritë, pozicionet, shpenzimet, historikun e çmimeve dhe regjistrat e importit; gabimet e leximit parandalojnë shkarkimin e një backup-i të paplotë.</p>
+  </section>
+
+  <section class="sheet" id="siguria">
+    <h2>9. Siguria dhe integriteti i të dhënave</h2>
+    <p>Aplikacioni përdor Supabase Auth dhe kontekstin e profilit për rrjedhën e aprovimit të përdoruesve. Kontrolli i plotë i qasjes nuk mund të konkludohet vetëm nga ndërfaqja: politikat Row Level Security, rolet e databazës, konfigurimi i projektit Supabase dhe sjellja e funksioneve duhet kontrolluar në mjedisin e vendosur.</p>
+    <p>Funksionet e reja të databazës përdorin privilegjet e thirrësit (<code>SECURITY INVOKER</code>) dhe ekzekutimi u jepet rolit <code>authenticated</code>. Ato synojnë të ruajnë konsistencën e një pozicioni dhe shpenzimeve të tij në një transaksion. Kjo nuk është zëvendësim për politikat RLS, testimin me role të ndryshme ose kopjet rezervë të databazës.</p>
+    <p>Backup-i i shkarkueshëm nuk përfshin kredenciale apo profile/auth të përdoruesve. Ai është eksport i të dhënave operative dhe nuk ofron ende funksion automatik të rikthimit të tyre në databazë.</p>
+  </section>
+
+  <section class="sheet" id="testimi">
+    <h2>10. Testimi dhe rezultatet</h2>
+    <p>Verifikimet automatike të kryera për këtë version përfshijnë:</p>
+    <ul>
+      <li>llogaritjen e kostove, fitimit, TVSH-së dhe çmimit për njësi;</li>
+      <li>heqjen e TVSH-së nga vlera bruto për raportimin e fitimit, si dhe përpunimin e datave, kategorive dhe trendit mujor të ofertave;</li>
+      <li>ndarjen e pozicioneve sipas seksioneve dhe planifikimin e tyre në faqe;</li>
+      <li>gjenerimin e workbook-ut duke lexuar shabllonin Excel nga skedarët e projektit.</li>
+    </ul>
+    <p><strong>Gjendja e verifikimit në mjedisin e zhvillimit:</strong> build-i i TypeScript/Vite kaloi; 11 teste automatike në katër skedarë testimi kaluan. Këto kontrolle nuk provojnë integrimin me një instancë të vërtetë Supabase. Migrimi i databazës, politikat RLS, autentikimi real, shkarkimet në shfletues dhe rrjedhat e plota të përdoruesit duhet testuar para publikimit.</p>
+    <p>Vlerësimi i ardhshëm duhet të shtojë teste integrimi për ruajtjen atomike, skenarë me gabime databaze, import me dokumente përfaqësuese dhe testim të përdorshmërisë me përdorues. Rezultatet e atyre testeve duhet raportuar me metodën dhe kushtet e ekzekutimit.</p>
+  </section>
+
+  <section class="sheet" id="kufizimet">
+    <h2>11. Kufizimet dhe puna e ardhshme</h2>
+    <ul>
+      <li>Migrimi i ri Supabase duhet ekzekutuar në mjedisin përkatës dhe verifikuar me të dhënat reale; projekti nuk ka mjedis databaze të përfshirë në testet lokale.</li>
+      <li>Shumë përmbledhje lexojnë të dhëna operative në aplikacion; faqëzimi dhe agregimi në databazë duhen zgjeruar kur vëllimi i të dhënave rritet.</li>
+      <li>Kostoja reale e projektit plotësohet manualisht; aktualisht nuk është kontabilitet automatik i faturave të furnitorëve.</li>
+      <li>Backup-i JSON mund të shkarkohet, por procesi i rikthimit dhe planifikimi automatik i kopjeve rezervë nuk janë pjesë e versionit aktual.</li>
+      <li>Parseri Excel mbështet strukturat e njohura nga projekti; dokumentet me formate të reja kërkojnë validim dhe përshtatje.</li>
+      <li>Nevojitet verifikim i politikave RLS dhe kontroll i plotë i autorizimit në Supabase para përdorimit me të dhëna reale.</li>
+      <li>Testet automatike të UI-së dhe përdorshmërisë nuk janë ende të përfshira.</li>
+    </ul>
+    <p>Si punë e ardhshme propozohet testimi me përdorues, faqëzimi/agregimi i raporteve, rrjedha e rikthimit të backup-it, kontrolle më të plota të autorizimit dhe validim i eksportit me përdoruesit e procesit të ofertimit.</p>
+  </section>
+
+  <section class="sheet" id="perfundimi">
+    <h2>12. Përfundimi</h2>
+    <p>Projekti demonstron realizimin e një aplikacioni web që bashkon menaxhimin e projekteve dhe pozicioneve, llogaritjen e kostove, analizën e të dhënave dhe përgatitjen e dokumenteve Excel. Ndarja e kodit në faqe, shërbime dhe module ndihmëse krijon bazë për mirëmbajtje dhe zgjerim.</p>
+    <p>Vlera kryesore teknike është centralizimi i rrjedhave që përndryshe kryhen në mënyrë të përsëritur, së bashku me logjikë të ripërdorshme për llogaritje dhe përpunim të dokumenteve. Për ta konsideruar zgjidhjen të gatshme për përdorim real, mbetet e domosdoshme zbatimi i migrimit në Supabase, testimi i autorizimit dhe validimi i rezultateve me përdorues e dokumente reale.</p>
+  </section>
+
+  <section class="sheet" id="referencat">
+    <h2>13. Referencat</h2>
+    <ol>
+      <li>React, “React Documentation,” <a href="https://react.dev/">https://react.dev/</a>.</li>
+      <li>TypeScript, “The TypeScript Handbook,” <a href="https://www.typescriptlang.org/docs/">https://www.typescriptlang.org/docs/</a>.</li>
+      <li>Vite, “Vite Guide,” <a href="https://vite.dev/guide/">https://vite.dev/guide/</a>.</li>
+      <li>Supabase, “Supabase Documentation,” <a href="https://supabase.com/docs">https://supabase.com/docs</a>.</li>
+      <li>ExcelJS, “ExcelJS Documentation,” <a href="https://github.com/exceljs/exceljs">https://github.com/exceljs/exceljs</a>.</li>
+      <li>Vitest, “Vitest Guide,” <a href="https://vitest.dev/guide/">https://vitest.dev/guide/</a>.</li>
+    </ol>
+    <p class="note"><strong>Përpara dërgimit:</strong> plotësoni universitetin, fakultetin, emrin, indeksin dhe mentorin; konfirmoni stilin e citimeve të kërkuar nga fakulteti; diskutoni me mentorin nëse dëshiron strukturë tjetër të kapitujve. Ky dokument është draft teknik, jo deklaratë se janë kryer matje apo verifikime që nuk janë raportuar këtu.</p>
+  </section>
+  <footer>Drafti bazohet në implementimin e repository-t dhe rezultatet e testimit të këtij versioni.</footer>
+</main>
 </body>
 </html>

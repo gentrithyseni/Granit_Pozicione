@@ -265,7 +265,7 @@ export function ProfilePage() {
             <div className="profile-account-summary-row"><span>Timeout i sesionit</span><strong><Timer size={14} /> 60 min</strong></div>
           </div>
           <div className="profile-quick-links">
-            <NavLink to="/about-us">Rreth GRANITI <ArrowUpRight size={15} /></NavLink>
+            <NavLink to="/about-us">Rreth Megrant ING <ArrowUpRight size={15} /></NavLink>
             <NavLink to="/data">Hap të dhënat <ArrowUpRight size={15} /></NavLink>
           </div>
         </aside>

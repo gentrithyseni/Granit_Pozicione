@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { BarChart3, ClipboardCheck, Download, Search, Save, Trash2 } from 'lucide-react';
 import { Shell } from '../components/Shell';
 import { CategoryProjectCompare } from '../components/CategoryProjectCompare';
 import { ComparePositions } from '../components/ComparePositions';
-import { PositionCard } from '../components/PositionCard';
+import { PositionCard, type PositionEditForm } from '../components/PositionCard';
 import { StatusBadge } from '../components/StatusBadge';
-import { PROJECT_STATUSES } from '../constants/projectStatus';
+import { PROJECT_STATUSES, type ProjectStatus } from '../constants/projectStatus';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabase';
 import { exportProjectCSV } from '../services/export';
-import { ensureDefaultCategories, groupItemsByProject, deleteCategory } from '../services/categories';
+import { categoryNameKey, ensureDefaultCategories, groupItemsByProject, deleteCategory, uniqueCategories } from '../services/categories';
 import { updateProject, deleteProject, deletePosition } from '../services/projects';
 import { recordPriceSnapshot } from '../services/priceHistory';
+import { calculatePositionPrice } from '../lib/pricing';
 import { PriceHistoryDashboard } from '../components/PriceHistoryDashboard';
 import { RevenueTrendChart } from '../components/RevenueTrendChart';
 import type { CategorySummary, DbCategory, DbProject, DbProjectItem, ItemWithMeta } from '../types/database';
@@ -33,23 +35,24 @@ export function DataPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [itemSearchTerm, setItemSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<PositionEditForm>({
     description: '',
     position_number: '',
     unit: '',
-    quantity: 0,
+    quantity: '',
     category_id: '',
     project_id: '',
-    materialPrice: 0,
-    laborPrice: 0,
-    days: 0,
-    foodPrice: 0,
+    materialPrice: '',
+    laborPrice: '',
+    days: '',
+    foodPrice: '',
     location: '',
-    transportPrice: 0,
-    otherPrice: 0,
-    profitPercent: 0,
-    vatPercent: 18,
+    transportPrice: '',
+    otherPrice: '',
+    profitPercent: '',
+    vatPercent: '18',
   });
+  const [originalEditForm, setOriginalEditForm] = useState<PositionEditForm | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
   const [metaClient, setMetaClient] = useState('');
@@ -59,30 +62,65 @@ export function DataPage() {
   const [metaActualNotes, setMetaActualNotes] = useState('');
   const [projectAnalysis, setProjectAnalysis] = useState<string[] | null>(null);
   const [monthlyRevenueTrend, setMonthlyRevenueTrend] = useState<MonthlyRevenuePoint[]>([]);
+  const [trendStatus, setTrendStatus] = useState<ProjectStatus | 'all'>('all');
+  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendError, setTrendError] = useState<string | null>(null);
+  const [analysisRefreshKey, setAnalysisRefreshKey] = useState(0);
+  const detailRequestId = useRef(0);
 
   const reloadProjects = async () => {
     if (!supabase) return;
-    const cats = await ensureDefaultCategories();
-    const { data: projects } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-    const list = projects || [];
-    setProjectsList(list);
-    setCategoriesList(cats);
-    setCategorySummaries(await fetchCategorySummaries(cats));
-    setMonthlyRevenueTrend(await fetchMonthlyRevenueTrend());
+    try {
+      const cats = await ensureDefaultCategories();
+      const { data: projects, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+      if (error) throw new Error(`Projektet nuk u ngarkuan: ${error.message}`);
+      const summaries = await fetchCategorySummaries(cats);
+      setProjectsList(projects || []);
+      setCategoriesList(cats);
+      setCategorySummaries(summaries);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Të dhënat e projekteve nuk u rifreskuan.', 'error');
+    }
   };
 
-  const loadComparePool = async (categoryId?: string) => {
+  const loadComparePool = async (categoryIds?: string | string[], requestId = detailRequestId.current) => {
     if (!supabase) return;
     let query = supabase.from('project_items').select(ITEM_SELECT).order('created_at', { ascending: false }).limit(300);
-    if (categoryId) query = query.eq('category_id', categoryId);
-    const { data } = await query;
+    if (Array.isArray(categoryIds) && categoryIds.length > 0) query = query.in('category_id', categoryIds);
+    else if (typeof categoryIds === 'string' && categoryIds) query = query.eq('category_id', categoryIds);
+    const { data, error } = await query;
+    if (requestId !== detailRequestId.current) return;
+    if (error) {
+      setComparePool([]);
+      showToast(`Pozicionet për krahasim nuk u ngarkuan: ${error.message}`, 'error');
+      return;
+    }
     setComparePool((data as ItemWithMeta[]) || []);
   };
 
   useEffect(() => {
-    reloadProjects();
-    loadComparePool();
+    void reloadProjects();
+    void loadComparePool(undefined, detailRequestId.current);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    setTrendLoading(true);
+    setTrendError(null);
+    fetchMonthlyRevenueTrend(trendStatus)
+      .then((points) => {
+        if (active) setMonthlyRevenueTrend(points);
+      })
+      .catch((error: unknown) => {
+        if (active) setTrendError(error instanceof Error ? error.message : 'Trendi i ofertave nuk u ngarkua.');
+      })
+      .finally(() => {
+        if (active) setTrendLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [trendStatus, projectsList]);
 
   useEffect(() => {
     if (selectedProject) {
@@ -96,22 +134,33 @@ export function DataPage() {
 
   const loadProjectDetails = async (project: DbProject) => {
     if (!supabase) return;
+    const requestId = ++detailRequestId.current;
     if (selectedProject?.id === project.id) {
       setSelectedProject(null);
       setProjectItems([]);
       setSelectedItemId(null);
+      setComparePool([]);
       return;
     }
     setSelectedProject(project);
     setSelectedCategory(null);
+    setProjectItems([]);
     setCategoryItems([]);
+    setComparePool([]);
     setItemSearchTerm('');
     setSelectedItemId(null);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('project_items')
       .select(ITEM_SELECT)
       .eq('project_id', project.id)
       .order('created_at', { ascending: false });
+    if (requestId !== detailRequestId.current) return;
+    if (error) {
+      setProjectItems([]);
+      setComparePool([]);
+      showToast(`Pozicionet e projektit nuk u ngarkuan: ${error.message}`, 'error');
+      return;
+    }
     const items = (data as ItemWithMeta[]) || [];
     setProjectItems(items);
     setComparePool(items);
@@ -121,26 +170,39 @@ export function DataPage() {
 
   const loadCategoryDetails = async (category: DbCategory) => {
     if (!supabase) return;
+    const requestId = ++detailRequestId.current;
     if (selectedCategory?.id === category.id) {
       setSelectedCategory(null);
       setCategoryItems([]);
       setSelectedItemId(null);
+      setComparePool([]);
       return;
     }
     setSelectedCategory(category);
     setSelectedProject(null);
     setProjectItems([]);
+    setCategoryItems([]);
+    setComparePool([]);
     setItemSearchTerm('');
     setSelectedItemId(null);
-    const { data } = await supabase
+    const matchingCategoryIds = categoriesList
+      .filter((entry) => categoryNameKey(entry.name) === categoryNameKey(category.name))
+      .map((entry) => entry.id);
+    const { data, error } = await supabase
       .from('project_items')
       .select(ITEM_SELECT)
-      .eq('category_id', category.id)
+      .in('category_id', matchingCategoryIds)
       .order('created_at', { ascending: false });
+    if (requestId !== detailRequestId.current) return;
+    if (error) {
+      setCategoryItems([]);
+      setComparePool([]);
+      showToast(`Pozicionet e kategorisë nuk u ngarkuan: ${error.message}`, 'error');
+      return;
+    }
     const items = (data as ItemWithMeta[]) || [];
     setCategoryItems(items);
-    setComparePool(items);
-    await loadComparePool(category.id);
+    setComparePool(items.slice(0, 300));
     setCompareA('');
     setCompareB('');
   };
@@ -160,6 +222,7 @@ export function DataPage() {
     }
     showToast('Projekti u përditësua.', 'success');
     await reloadProjects();
+    setAnalysisRefreshKey((key) => key + 1);
   };
 
   const handleDeleteProject = async () => {
@@ -203,9 +266,13 @@ export function DataPage() {
       return;
     }
     showToast('Kategoria u fshi.', 'success');
-    const cats = await ensureDefaultCategories();
-    setCategoriesList(cats);
-    if (selectedCategory?.id === category.id) setSelectedCategory(null);
+    try {
+      const cats = await ensureDefaultCategories();
+      setCategoriesList(cats);
+      if (selectedCategory?.id === category.id) setSelectedCategory(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Kategoritë nuk u rifreskuan pas fshirjes.', 'error');
+    }
   };
 
   const analyzeSelectedProject = () => {
@@ -232,10 +299,16 @@ export function DataPage() {
     setEditingId(item.id);
     setSelectedItemId(item.id);
 
-    // Fetch expenses to pre-fill the form, if any exist
+    const profitPercent = Number(item.profit_percent) || 0;
+    const vatPercent = item.vat_percent == null ? 18 : Number(item.vat_percent);
     let materialPrice = 0, laborPrice = 0, days = 0, foodPrice = 0, transportPrice = 0, otherPrice = 0;
     if (supabase) {
-      const { data: expenses } = await supabase.from('item_expenses').select('*').eq('project_item_id', item.id);
+      const { data: expenses, error } = await supabase.from('item_expenses').select('*').eq('project_item_id', item.id);
+      if (error) {
+        showToast(`Shpenzimet nuk mund të lexohen: ${error.message}`, 'error');
+        setEditingId(null);
+        return;
+      }
       if (expenses) {
         expenses.forEach(exp => {
           if (exp.expense_type === 'material') materialPrice = Number(exp.unit_cost) || 0;
@@ -250,86 +323,110 @@ export function DataPage() {
           }
           if (exp.expense_type === 'other') otherPrice = Number(exp.unit_cost) || 0;
         });
+        if (expenses.length === 0) {
+          const quantity = Number(item.quantity) || 0;
+          const marginFactor = (1 + profitPercent / 100) * (1 + vatPercent / 100);
+          if (quantity > 0 && marginFactor > 0) {
+            materialPrice = Number(item.total_price) / marginFactor / quantity;
+          }
+        }
       }
-    }
-
-    // Default to the original unit_price logic if expenses are missing (fallback)
-    if (materialPrice === 0 && laborPrice === 0 && otherPrice === 0) {
-      materialPrice = Number(item.unit_price) || 0;
     }
 
     setEditForm({
       description: item.description || '',
       position_number: item.position_number || '',
       unit: item.unit || '',
-      quantity: Number(item.quantity) || 0,
+      quantity: String(Number(item.quantity) || 0),
       category_id: item.category_id || '',
       project_id: item.project_id || '',
-      materialPrice,
-      laborPrice,
-      days,
-      foodPrice,
-      location: '', 
-      transportPrice,
-      otherPrice,
-      profitPercent: 0, 
-      vatPercent: 18,   
+      materialPrice: String(materialPrice),
+      laborPrice: String(laborPrice),
+      days: String(days),
+      foodPrice: String(foodPrice),
+      location: '',
+      transportPrice: String(transportPrice),
+      otherPrice: String(otherPrice),
+      profitPercent: String(profitPercent),
+      vatPercent: String(vatPercent),
+    });
+    setOriginalEditForm({
+      description: item.description || '',
+      position_number: item.position_number || '',
+      unit: item.unit || '',
+      quantity: String(Number(item.quantity) || 0),
+      category_id: item.category_id || '',
+      project_id: item.project_id || '',
+      materialPrice: String(materialPrice),
+      laborPrice: String(laborPrice),
+      days: String(days),
+      foodPrice: String(foodPrice),
+      location: '',
+      transportPrice: String(transportPrice),
+      otherPrice: String(otherPrice),
+      profitPercent: String(profitPercent),
+      vatPercent: String(vatPercent),
     });
   };
 
   const saveRowEdit = async () => {
     if (!supabase || !editingId) return;
     const now = new Date().toISOString();
-    
-    const quantity = Number(editForm.quantity) || 0;
-    const days = Number(editForm.days) || 0;
-    
-    const materialTotal = quantity * (Number(editForm.materialPrice) || 0);
-    const laborTotal = quantity * (Number(editForm.laborPrice) || 0);
-    const foodTotal = days * (Number(editForm.foodPrice) || 0);
-    const transportTotal = days * (Number(editForm.transportPrice) || 0);
-    const otherTotal = Number(editForm.otherPrice) || 0;
-
-    const subtotal = materialTotal + laborTotal + foodTotal + transportTotal + otherTotal;
-    const profitAmount = subtotal * ((Number(editForm.profitPercent) || 0) / 100);
-    const vatBase = subtotal + profitAmount;
-    const vatAmount = vatBase * ((Number(editForm.vatPercent) || 18) / 100);
-    
-    const total = vatBase + vatAmount;
-    const unitPrice = quantity > 0 ? total / quantity : total;
-
-    const { error: itemError } = await supabase
-      .from('project_items')
-      .update({
-        description: editForm.description,
-        position_number: editForm.position_number,
-        unit: editForm.unit,
-        quantity: quantity,
-        category_id: editForm.category_id || null,
-        unit_price: unitPrice,
-        total_price: total,
-        updated_at: now,
-      })
-      .eq('id', editingId);
-
-    if (itemError) {
-      showToast(itemError.message, 'error');
+    const quantity = Number(editForm.quantity);
+    const days = Number(editForm.days);
+    if (!editForm.description.trim() || !Number.isFinite(quantity) || quantity <= 0) {
+      showToast('Përshkrimi është i detyrueshëm dhe sasia duhet të jetë më e madhe se 0.', 'error');
+      return;
+    }
+    if (!Number.isFinite(days) || days < 0) {
+      showToast('Ditët e punës duhet të jenë një numër zero ose më i madh.', 'error');
       return;
     }
 
-    // Update item expenses (delete old, insert new)
-    await supabase.from('item_expenses').delete().eq('project_item_id', editingId);
-    await supabase.from('item_expenses').insert([
-      { project_item_id: editingId, expense_type: 'material', description: 'Material', unit_cost: Number(editForm.materialPrice) || 0, quantity, total_cost: materialTotal },
-      { project_item_id: editingId, expense_type: 'labor', description: 'Puna', unit_cost: Number(editForm.laborPrice) || 0, quantity, total_cost: laborTotal },
-      { project_item_id: editingId, expense_type: 'food', description: 'Ushqim', unit_cost: Number(editForm.foodPrice) || 0, quantity: days, total_cost: foodTotal },
-      { project_item_id: editingId, expense_type: 'transport', description: 'Transport', unit_cost: Number(editForm.transportPrice) || 0, quantity: days, total_cost: transportTotal },
-      { project_item_id: editingId, expense_type: 'other', description: 'Tjera', unit_cost: otherTotal, quantity: 1, total_cost: otherTotal },
-    ]);
+    const breakdown = calculatePositionPrice({
+      quantity,
+      materialPrice: Number(editForm.materialPrice),
+      laborPrice: Number(editForm.laborPrice),
+      days,
+      foodPrice: Number(editForm.foodPrice),
+      transportPrice: Number(editForm.transportPrice),
+      otherPrice: Number(editForm.otherPrice),
+      profitPercent: Number(editForm.profitPercent) || 0,
+      vatPercent: editForm.vatPercent === '' ? 18 : Number(editForm.vatPercent) || 0,
+    });
+    const { materialTotal, laborTotal, foodTotal, transportTotal, otherTotal, total, unitPrice } = breakdown;
+    const expenses = [
+      { expense_type: 'material', description: 'Material', unit_cost: Number(editForm.materialPrice) || 0, quantity, total_cost: materialTotal },
+      { expense_type: 'labor', description: 'Puna', unit_cost: Number(editForm.laborPrice) || 0, quantity, total_cost: laborTotal },
+      { expense_type: 'food', description: 'Ushqim', unit_cost: Number(editForm.foodPrice) || 0, quantity: days, total_cost: foodTotal },
+      { expense_type: 'transport', description: `Transport: ${editForm.location.trim() || 'Pa qytet'}`, unit_cost: Number(editForm.transportPrice) || 0, quantity: days, total_cost: transportTotal },
+      { expense_type: 'other', description: 'Tjera', unit_cost: otherTotal, quantity: 1, total_cost: otherTotal },
+    ];
+
+    const { error: itemError } = await supabase.rpc('update_project_position', {
+      p_item_id: editingId,
+      p_item: {
+        description: editForm.description.trim(),
+        position_number: editForm.position_number.trim() || null,
+        unit: editForm.unit,
+        quantity,
+        category_id: editForm.category_id || null,
+        unit_price: unitPrice,
+        total_price: total,
+        profit_percent: Number(editForm.profitPercent) || 0,
+        vat_percent: editForm.vatPercent === '' ? 18 : Number(editForm.vatPercent) || 0,
+        updated_at: now,
+      },
+      p_expenses: expenses,
+    });
+    if (itemError) {
+      showToast(`Pozicioni dhe kostot nuk u përditësuan: ${itemError.message}`, 'error');
+      return;
+    }
 
     // Historiku i çmimeve: shto NJË REKORD TË RI (s'e fshin/mbishkruan historinë e mëparshme),
     // që të mund të shihet si ka ndryshuar çmimi i këtij pozicioni me kohë.
-    await recordPriceSnapshot({
+    const priceHistoryResult = await recordPriceSnapshot({
       project_item_id: editingId,
       project_id: editForm.project_id || null,
       category_id: editForm.category_id || null,
@@ -344,10 +441,15 @@ export function DataPage() {
     });
 
     setEditingId(null);
+    setOriginalEditForm(null);
     showToast('Pozicioni u përditësua.', 'success');
+    if (priceHistoryResult.error) {
+      showToast(`Pozicioni u përditësua, por historiku i çmimeve jo: ${priceHistoryResult.error}`, 'error');
+    }
     if (selectedProject) await loadProjectDetails(selectedProject);
     if (selectedCategory) await loadCategoryDetails(selectedCategory);
     await reloadProjects();
+    setAnalysisRefreshKey((key) => key + 1);
   };
 
   const handleExport = async () => {
@@ -367,6 +469,7 @@ export function DataPage() {
     () => (selectedCategory ? groupItemsByProject(categoryItems) : []),
     [selectedCategory, categoryItems]
   );
+  const visibleCategories = useMemo(() => uniqueCategories(categoriesList), [categoriesList]);
 
   const filterProjectItems = projectItems.filter(
     (item) =>
@@ -390,7 +493,12 @@ export function DataPage() {
           editForm={editForm}
           onEditFormChange={setEditForm}
           onSave={saveRowEdit}
-          onCancel={() => setEditingId(null)}
+          onCancel={() => {
+            setEditingId(null);
+            setOriginalEditForm(null);
+            setSelectedItemId(null);
+          }}
+          onReset={() => originalEditForm && setEditForm({ ...originalEditForm })}
           onDelete={() => handleDeletePosition(item)}
           categories={categoriesList}
         />
@@ -454,8 +562,12 @@ export function DataPage() {
             <h3 className="panel-title">2. Kategoritë</h3>
             <p className="muted category-hint">Kliko Pllaka, Ujë… — shfaqen ofertat nga të gjithë projektet + krahasim mes projekteve.</p>
             <div className="category-wrap">
-              {categoriesList.map((category) => {
-                const summary = categorySummaries.find((s) => s.id === category.id);
+              {visibleCategories.map((category) => {
+                const categoryIds = categoriesList
+                  .filter((entry) => categoryNameKey(entry.name) === categoryNameKey(category.name))
+                  .map((entry) => entry.id);
+                const matchingSummaries = categorySummaries.filter((summary) => categoryIds.includes(summary.id));
+                const summaryCount = matchingSummaries.reduce((total, summary) => total + summary.count, 0);
                 return (
                   <button
                     key={category.id}
@@ -464,7 +576,7 @@ export function DataPage() {
                     onClick={() => loadCategoryDetails(category)}
                   >
                     {category.name}
-                    {summary && summary.count > 0 ? ` (${summary.count})` : ''}
+                    {summaryCount > 0 ? ` (${summaryCount})` : ''}
                   </button>
                 );
               })}
@@ -483,65 +595,94 @@ export function DataPage() {
         </aside>
       </div>
 
-      <PriceHistoryDashboard categories={categoriesList} />
-
-      <section className="panel panel-top-gap revenue-trend-panel">
-        <h3 className="panel-heading-accent">Trendi mujor i ofertave</h3>
-        <p className="muted">Vlera e ofertuar sipas muajit, bazuar në datën e regjistrimit të pozicioneve.</p>
-        <RevenueTrendChart points={monthlyRevenueTrend} />
-      </section>
-
       {selectedProject && (
-        <section className="panel panel-top-gap">
-          <h3 className="panel-heading-accent">Oferta: {selectedProject.name}</h3>
+        <section className="panel panel-top-gap project-detail-panel">
+          <header className="project-detail-header">
+            <div>
+              <span className="project-detail-eyebrow">Menaxhimi i ofertës</span>
+              <h2>{selectedProject.name}</h2>
+              <p>
+                {metaClient.trim() || 'Klient i papërcaktuar'}
+                <span aria-hidden="true"> · </span>
+                {projectItems.length} pozicione në ofertë
+              </p>
+            </div>
+            <div className="project-detail-status">
+              <span>Statusi i projektit</span>
+              <StatusBadge status={metaStatus} />
+            </div>
+          </header>
 
           <div className="project-meta-panel">
-            <label>
-              Klienti
-              <input value={metaClient} onChange={(e) => setMetaClient(e.target.value)} />
-            </label>
-            <label>
-              Statusi
-              <select value={metaStatus} onChange={(e) => setMetaStatus(e.target.value)}>
-                {PROJECT_STATUSES.map((s) => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Përshkrimi
-              <input value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} />
-            </label>
-            <div className="project-meta-field with-inline-hint">
+            <div className="project-meta-grid">
               <label>
-                Kosto reale finale (€)
+                Klienti
+                <input value={metaClient} onChange={(e) => setMetaClient(e.target.value)} placeholder="Emri i klientit" />
               </label>
-              <div className="field-hint field-hint-top">Sa ka kushtuar realisht (jo çmimi i ofertës) — krahasohet automatikisht te "Analiza e çmimeve".</div>
-              <input
-                type="number"
-                step="0.01"
-                value={metaActualCost}
-                onChange={(e) => setMetaActualCost(e.target.value)}
-                placeholder="Plotëso kur projekti mbyllet"
-              />
+              <label>
+                Statusi
+                <select value={metaStatus} onChange={(e) => setMetaStatus(e.target.value)}>
+                  {PROJECT_STATUSES.map((s) => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Përshkrimi i projektit
+                <input value={metaDescription} onChange={(e) => setMetaDescription(e.target.value)} placeholder="Përshkrim i shkurtër (opsional)" />
+              </label>
+              <div className="project-meta-field project-actual-cost">
+                <label htmlFor="project-actual-cost">Kosto reale finale (€)</label>
+                <p>Plotësoje kur projekti përfundon. Përdoret në raportin e fitimit real.</p>
+                <input
+                  id="project-actual-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={metaActualCost}
+                  onChange={(e) => setMetaActualCost(e.target.value)}
+                  placeholder="p.sh. 13 000"
+                />
+                <button
+                  type="button"
+                  className="project-report-link"
+                  onClick={() => document.getElementById('price-analysis')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                >
+                  <BarChart3 size={15} /> Shiko raportin e fitimit
+                </button>
+              </div>
+              <label className="project-notes-field">
+                Shënime mbi koston reale
+                <input value={metaActualNotes} onChange={(e) => setMetaActualNotes(e.target.value)} placeholder="p.sh. rritje e materialit, ditë shtesë..." />
+              </label>
             </div>
-            <label>
-              Shënime mbi koston reale
-              <input value={metaActualNotes} onChange={(e) => setMetaActualNotes(e.target.value)} placeholder="p.sh. shtrenjtim materiali, ditë shtesë..." />
-            </label>
-            <div className="form-actions-row">
-              <button type="button" className="primary-button" onClick={saveProjectMeta}>Ruaj projektin</button>
-              <button type="button" className="card" onClick={analyzeSelectedProject}>Kontrollo projektin</button>
-              <button type="button" className="card import-cancel-btn" onClick={handleDeleteProject}>Fshi projektin</button>
+            <div className="project-meta-actions">
+              <button type="button" className="primary-button" onClick={saveProjectMeta}>
+                <Save size={16} /> Ruaj ndryshimet
+              </button>
+              <button type="button" className="card" onClick={analyzeSelectedProject}>
+                <ClipboardCheck size={16} /> Analizo projektin
+              </button>
+              <button type="button" className="card project-delete-action" onClick={handleDeleteProject}>
+                <Trash2 size={16} /> Fshi projektin
+              </button>
             </div>
           </div>
 
-          <div className="project-controls">
+          <div className="project-positions-toolbar">
+            <div>
+              <h3>Pozicionet e ofertës</h3>
+              <p>Shfleto, redakto dhe krahaso pozicionet e këtij projekti.</p>
+            </div>
+            <div className="project-controls">
             <label>
-              Kërko pozicione
-              <input value={itemSearchTerm} onChange={(e) => setItemSearchTerm(e.target.value)} placeholder="Kërko..." />
+              <span><Search size={14} /> Kërko pozicione</span>
+              <input value={itemSearchTerm} onChange={(e) => setItemSearchTerm(e.target.value)} placeholder="Përshkrimi ose nr. pozicioni" />
             </label>
-            <button type="button" className="card" onClick={handleExport}>Export CSV</button>
+            <button type="button" className="card project-export-action" onClick={handleExport}>
+              <Download size={16} /> Eksporto CSV
+            </button>
+            </div>
           </div>
 
           {filterProjectItems.length > 0 ? renderPositionList(filterProjectItems) : <p className="muted">Ska pozicione në këtë projekt.</p>}
@@ -555,6 +696,7 @@ export function DataPage() {
               </ul>
             </div>
           )}
+
         </section>
       )}
 
@@ -588,6 +730,25 @@ export function DataPage() {
           )}
         </section>
       )}
+
+      <PriceHistoryDashboard categories={categoriesList} refreshKey={analysisRefreshKey} />
+
+      <section className="panel panel-top-gap revenue-trend-panel">
+        <div className="revenue-trend-panel-header">
+          <div>
+            <span className="revenue-trend-eyebrow">Analiza e aktivitetit</span>
+            <h3 className="panel-heading-accent">Vlera e ofertave sipas muajit</h3>
+          </div>
+          <span className="revenue-trend-period">6 muajt e fundit</span>
+        </div>
+        <RevenueTrendChart
+          points={monthlyRevenueTrend}
+          status={trendStatus}
+          onStatusChange={setTrendStatus}
+          loading={trendLoading}
+          error={trendError}
+        />
+      </section>
     </Shell>
   );
 }

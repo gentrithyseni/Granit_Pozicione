@@ -1,11 +1,13 @@
 import { supabase } from '../lib/supabase';
 import { TRANSPORT_OPTIONS } from '../constants/transport';
+import type { ProjectStatus } from '../constants/projectStatus';
 import type { CategorySummary, DbProject, ProjectSummary } from '../types/database';
 
 export async function fetchProjectSummaries(projects: DbProject[]): Promise<ProjectSummary[]> {
   if (!supabase || projects.length === 0) return [];
   const { data, error } = await supabase.from('project_items').select('project_id, total_price');
-  if (error || !data) return [];
+  if (error) throw new Error(`Përmbledhja e projekteve nuk u ngarkua: ${error.message}`);
+  if (!data) throw new Error('Databaza nuk ktheu të dhëna për përmbledhjen e projekteve.');
 
   const totals = new Map<string, number>();
   for (const row of data) {
@@ -26,7 +28,8 @@ export async function fetchProjectSummaries(projects: DbProject[]): Promise<Proj
 export async function fetchCategorySummaries(categories: { id: string; name: string }[]): Promise<CategorySummary[]> {
   if (!supabase || categories.length === 0) return [];
   const { data, error } = await supabase.from('project_items').select('category_id, total_price');
-  if (error || !data) return [];
+  if (error) throw new Error(`Përmbledhja e kategorive nuk u ngarkua: ${error.message}`);
+  if (!data) throw new Error('Databaza nuk ktheu të dhëna për përmbledhjen e kategorive.');
 
   const summaries = new Map<string, { count: number; total: number }>();
   for (const row of data) {
@@ -52,14 +55,22 @@ export async function fetchCategorySummaries(categories: { id: string; name: str
     .sort((a, b) => b.total - a.total);
 }
 
-export type MonthlyRevenuePoint = { month: string; label: string; total: number; count: number; average: number };
+export type MonthlyRevenuePoint = {
+  month: string;
+  label: string;
+  total: number;
+  count: number;
+  positionCount: number;
+  average: number;
+};
 
 export type CityUsageSummary = { city: string; count: number };
 
 export async function fetchTransportCityUsage(): Promise<CityUsageSummary[]> {
   if (!supabase) return [];
   const { data, error } = await supabase.from('item_expenses').select('description, unit_cost').eq('expense_type', 'transport');
-  if (error || !data) return [];
+  if (error) throw new Error(`Përdorimi i transportit nuk u ngarkua: ${error.message}`);
+  if (!data) throw new Error('Databaza nuk ktheu të dhëna për përdorimin e transportit.');
 
   const counts = new Map<string, number>();
   data.forEach((row) => {
@@ -78,43 +89,64 @@ export async function fetchTransportCityUsage(): Promise<CityUsageSummary[]> {
     .sort((a, b) => b.count - a.count || a.city.localeCompare(b.city));
 }
 
-/** Trendi i vlerës totale (të ofertuar) sipas muajit — bazuar në created_at të pozicioneve.
- * Përdoret për të parë a po rritet biznesi me kohë (jo fitimi, thjesht vëllimi i ofertave). */
-export async function fetchMonthlyRevenueTrend(): Promise<MonthlyRevenuePoint[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase.from('project_items').select('total_price, created_at');
-  if (error || !data) return [];
+type MonthlyOfferProject = {
+  created_at?: string | null;
+  project_items?: { total_price?: number | string | null }[] | null;
+};
 
-  const byMonth = new Map<string, { total: number; count: number }>();
-  data.forEach((row) => {
-    const created = row.created_at as string | undefined;
-    if (!created) return;
-    const date = new Date(created);
+/** Kthen gjashtë muaj kalendarikë të ofertave, duke përfshirë edhe muajt pa aktivitet. */
+export function buildMonthlyOfferTrend(projects: MonthlyOfferProject[], now = new Date()): MonthlyRevenuePoint[] {
+  const firstMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  const byMonth = new Map<string, { total: number; count: number; positionCount: number }>();
+
+  for (let offset = 0; offset < 6; offset += 1) {
+    const date = new Date(firstMonth.getFullYear(), firstMonth.getMonth() + offset, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    byMonth.set(key, { total: 0, count: 0, positionCount: 0 });
+  }
+
+  projects.forEach((project) => {
+    if (!project.created_at) return;
+    const date = new Date(project.created_at);
     if (Number.isNaN(date.getTime())) return;
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-    const current = byMonth.get(key) || { total: 0, count: 0 };
-    current.total += Number(row.total_price) || 0;
-    current.count += 1;
-    byMonth.set(key, current);
+    const month = byMonth.get(key);
+    const items = project.project_items || [];
+    if (!month || items.length === 0) return;
+
+    month.total += items.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
+    month.count += 1;
+    month.positionCount += items.length;
   });
 
-  return Array.from(byMonth.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, summary]) => {
-      const [year, month] = key.split('-');
-      const date = new Date(Number(year), Number(month) - 1, 1);
-      return {
-        month: key,
-        label: date.toLocaleDateString('sq-AL', { month: 'short', year: '2-digit' }),
-        total: Number(summary.total.toFixed(2)),
-        count: summary.count,
-        average: summary.count > 0 ? Number((summary.total / summary.count).toFixed(2)) : 0,
-      };
-    });
+  return Array.from(byMonth.entries()).map(([key, summary]) => {
+    const [year, month] = key.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    return {
+      month: key,
+      label: date.toLocaleDateString('sq-AL', { month: 'short', year: 'numeric' }),
+      total: Number(summary.total.toFixed(2)),
+      count: summary.count,
+      positionCount: summary.positionCount,
+      average: summary.count > 0 ? Number((summary.total / summary.count).toFixed(2)) : 0,
+    };
+  });
+}
+
+/** Vlera e ofertave sipas muajit të krijimit të projektit; nuk paraqet pagesa apo fitim. */
+export async function fetchMonthlyRevenueTrend(status: ProjectStatus | 'all' = 'all'): Promise<MonthlyRevenuePoint[]> {
+  if (!supabase) return [];
+  let query = supabase.from('projects').select('created_at, project_items(total_price)');
+  if (status !== 'all') query = query.eq('status', status);
+  const { data, error } = await query;
+  if (error) throw new Error(`Trendi i ofertave nuk u ngarkua: ${error.message}`);
+  return buildMonthlyOfferTrend((data || []) as MonthlyOfferProject[]);
 }
 
 export async function fetchTotalSystemValue(): Promise<number> {
   if (!supabase) return 0;
-  const { data } = await supabase.from('project_items').select('total_price');
-  return (data || []).reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
+  const { data, error } = await supabase.from('project_items').select('total_price');
+  if (error) throw new Error(`Vlera e sistemit nuk u ngarkua: ${error.message}`);
+  if (!data) throw new Error('Databaza nuk ktheu të dhëna për vlerën e sistemit.');
+  return data.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
 }

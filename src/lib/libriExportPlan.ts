@@ -1,6 +1,6 @@
 import type { ParsedRow } from './excel';
 import { groupRowsBySection } from './paramasaPreview';
-import { packSectionIntoPages, type TemplateId, type LibriPage } from './libriPaging';
+import { packSectionIntoPages, TEMPLATE_SLOTS, type TemplateId, type LibriPage } from './libriPaging';
 
 const ROMAN_NUMERALS: Array<[number, string]> = [
   [1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'],
@@ -70,6 +70,105 @@ export type LibriExportPlanPage = {
   overflowWarning: boolean;
   mixedUnitsWarning: boolean;
 };
+
+export type StoredLibriExportPlanPage = {
+  templateId: TemplateId;
+  sectionKey: string;
+  sectionLabel: string;
+  rowIndexes: number[];
+  overflowWarning: boolean;
+  mixedUnitsWarning: boolean;
+};
+
+function isTemplateId(value: unknown): value is TemplateId {
+  return typeof value === 'number' && [1, 2, 3, 4, 5].includes(value);
+}
+
+export function serializeLibriExportPlan(
+  plan: LibriExportPlanPage[],
+  sourceRows: ParsedRow[]
+): StoredLibriExportPlanPage[] | null {
+  if (plan.length === 0 || sourceRows.length === 0) return null;
+  const rowIndexes = new Map(sourceRows.map((row, index) => [row, index]));
+  const seen = new Set<number>();
+  const storedPlan: StoredLibriExportPlanPage[] = [];
+
+  for (const page of plan) {
+    const indexes = page.rows.map((row) => rowIndexes.get(row));
+    if (
+      indexes.length === 0 ||
+      page.rows.length > TEMPLATE_SLOTS[page.templateId].length ||
+      indexes.some((index) => index === undefined || (index !== undefined && seen.has(index)))
+    ) {
+      return null;
+    }
+
+    const validIndexes = indexes.filter((index): index is number => index !== undefined);
+    validIndexes.forEach((index) => seen.add(index));
+    storedPlan.push({
+      templateId: page.templateId,
+      sectionKey: page.sectionKey,
+      sectionLabel: page.sectionLabel,
+      rowIndexes: validIndexes,
+      overflowWarning: page.overflowWarning,
+      mixedUnitsWarning: page.mixedUnitsWarning,
+    });
+  }
+
+  return seen.size === sourceRows.length ? storedPlan : null;
+}
+
+export function restoreLibriExportPlan(
+  storedPlan: unknown,
+  sourceRows: ParsedRow[]
+): LibriExportPlanPage[] | null {
+  if (!Array.isArray(storedPlan) || storedPlan.length === 0 || sourceRows.length === 0) return null;
+
+  const seen = new Set<number>();
+  const restoredPlan: LibriExportPlanPage[] = [];
+
+  for (const value of storedPlan) {
+    if (!value || typeof value !== 'object') return null;
+    const page = value as Partial<StoredLibriExportPlanPage>;
+    const templateId = page.templateId;
+    if (
+      !isTemplateId(templateId) ||
+      typeof page.sectionKey !== 'string' ||
+      typeof page.sectionLabel !== 'string' ||
+      !Array.isArray(page.rowIndexes) ||
+      page.rowIndexes.length === 0 ||
+      page.rowIndexes.length > TEMPLATE_SLOTS[templateId].length
+    ) {
+      return null;
+    }
+
+    const rowIndexes: number[] = [];
+    for (const index of page.rowIndexes) {
+      if (
+        typeof index !== 'number' ||
+        !Number.isInteger(index) ||
+        index < 0 ||
+        index >= sourceRows.length ||
+        seen.has(index)
+      ) {
+        return null;
+      }
+      rowIndexes.push(index);
+    }
+
+    rowIndexes.forEach((index) => seen.add(index));
+    restoredPlan.push({
+      templateId,
+      sectionKey: page.sectionKey,
+      sectionLabel: page.sectionLabel,
+      rows: rowIndexes.map((index) => sourceRows[index]),
+      overflowWarning: page.overflowWarning === true,
+      mixedUnitsWarning: page.mixedUnitsWarning === true,
+    });
+  }
+
+  return seen.size === sourceRows.length ? restoredPlan : null;
+}
 
 export function planLibriExport(rows: ParsedRow[], sectionTitleOverrides?: Record<string, string>): LibriExportPlanPage[] {
   const sections = groupRowsBySection(rows);

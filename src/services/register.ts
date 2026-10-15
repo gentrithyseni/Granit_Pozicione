@@ -27,33 +27,10 @@ export type RegisterFormValues = {
 export async function saveRegisterRow(values: RegisterFormValues) {
   if (!supabase) throw new Error('Supabase nuk është i lidhur');
 
-  let finalProjectId = values.projectId;
-  let finalCategoryId = values.categoryId;
-
-  if (finalProjectId === 'NEW' || !finalProjectId) {
-    if (!values.newProjectName.trim()) throw new Error('Shkruaj emrin e projektit');
-    const { data, error } = await supabase
-      .from('projects')
-      .insert([
-        {
-          name: values.newProjectName.trim(),
-          client: values.newProjectClient?.trim() || null,
-          status: values.newProjectStatus || 'draft',
-        },
-      ])
-      .select()
-      .single();
-    if (error) throw error;
-    finalProjectId = data.id;
-  }
-
-  if (finalCategoryId === 'NEW' || !finalCategoryId) {
-    if (!values.newCategoryName.trim()) throw new Error('Shkruaj emrin e kategorisë');
-    const { data, error } = await supabase.from('categories').insert([{ name: values.newCategoryName.trim() }]).select().single();
-    if (error) throw error;
-    finalCategoryId = data.id;
-    invalidateCache('categories');
-  }
+  const creatingProject = values.projectId === 'NEW' || !values.projectId;
+  const creatingCategory = values.categoryId === 'NEW' || !values.categoryId;
+  if (creatingProject && !values.newProjectName.trim()) throw new Error('Shkruaj emrin e projektit');
+  if (creatingCategory && !values.newCategoryName.trim()) throw new Error('Shkruaj emrin e kategorisë');
 
   const quantity = Number(values.quantity) || 0;
   const breakdown = calculatePositionPrice({
@@ -69,34 +46,45 @@ export async function saveRegisterRow(values: RegisterFormValues) {
   });
   const { materialTotal, laborTotal, foodTotal, transportTotal, otherTotal, total, unitPrice } = breakdown;
 
-  const { data: item, error: itemError } = await supabase
-    .from('project_items')
-    .insert([
-      {
-        project_id: finalProjectId,
-        category_id: finalCategoryId,
-        description: values.description,
-        unit: values.unit,
-        quantity,
-        unit_price: unitPrice,
-        total_price: total,
-      },
-    ])
-    .select()
-    .single();
-  if (itemError) throw itemError;
+  const expenses = [
+    { expense_type: 'material', description: 'Material', unit_cost: Number(values.materialPrice) || 0, quantity, total_cost: materialTotal },
+    { expense_type: 'labor', description: 'Puna', unit_cost: Number(values.laborPrice) || 0, quantity, total_cost: laborTotal },
+    { expense_type: 'food', description: 'Ushqim', unit_cost: Number(values.foodPrice) || 0, quantity: Number(values.days) || 0, total_cost: foodTotal },
+    { expense_type: 'transport', description: `Transport: ${values.location?.trim() || 'Pa qytet'}`, unit_cost: Number(values.transportPrice) || 0, quantity: Number(values.days) || 0, total_cost: transportTotal },
+    { expense_type: 'other', description: 'Tjera', unit_cost: otherTotal, quantity: 1, total_cost: otherTotal },
+  ];
 
-  const { error: expensesError } = await supabase.from('item_expenses').insert([
-    { project_item_id: item.id, expense_type: 'material', description: 'Material', unit_cost: Number(values.materialPrice) || 0, quantity, total_cost: materialTotal },
-    { project_item_id: item.id, expense_type: 'labor', description: 'Puna', unit_cost: Number(values.laborPrice) || 0, quantity, total_cost: laborTotal },
-    { project_item_id: item.id, expense_type: 'food', description: 'Ushqim', unit_cost: Number(values.foodPrice) || 0, quantity: Number(values.days) || 0, total_cost: foodTotal },
-    { project_item_id: item.id, expense_type: 'transport', description: `Transport: ${values.location?.trim() || 'Pa qytet'}`, unit_cost: Number(values.transportPrice) || 0, quantity: Number(values.days) || 0, total_cost: transportTotal },
-    { project_item_id: item.id, expense_type: 'other', description: 'Tjera', unit_cost: otherTotal, quantity: 1, total_cost: otherTotal },
-  ]);
-  if (expensesError) throw expensesError;
+  const { data: saved, error } = await supabase.rpc('save_register_position', {
+    p_project_id: creatingProject ? null : values.projectId,
+    p_new_project: creatingProject
+      ? {
+          name: values.newProjectName.trim(),
+          client: values.newProjectClient?.trim() || null,
+          status: values.newProjectStatus || 'draft',
+        }
+      : null,
+    p_category_id: creatingCategory ? null : values.categoryId,
+    p_new_category: creatingCategory ? { name: values.newCategoryName.trim() } : null,
+    p_item: {
+      description: values.description.trim(),
+      unit: values.unit,
+      quantity,
+      unit_price: unitPrice,
+      total_price: total,
+      profit_percent: Number(values.profitPercent) || 0,
+      vat_percent: values.vatPercent == null ? 18 : Number(values.vatPercent) || 0,
+    },
+    p_expenses: expenses,
+  });
+  if (error) throw new Error(`Pozicioni nuk u ruajt: ${error.message}`);
+  if (!saved?.item_id || !saved.project_id || !saved.category_id) {
+    throw new Error('Databaza nuk ktheu identifikuesit e rreshtit të ruajtur.');
+  }
+  const { item_id: itemId, project_id: finalProjectId, category_id: finalCategoryId } = saved;
+  if (creatingCategory) invalidateCache('categories');
 
-  await recordPriceSnapshot({
-    project_item_id: item.id,
+  const priceHistoryResult = await recordPriceSnapshot({
+    project_item_id: itemId,
     project_id: finalProjectId,
     category_id: finalCategoryId,
     description: values.description,
@@ -114,5 +102,6 @@ export async function saveRegisterRow(values: RegisterFormValues) {
     qty: quantity,
     price: Number(unitPrice.toFixed(2)),
     total: Number(total.toFixed(2)),
+    priceHistoryError: priceHistoryResult.error,
   };
 }

@@ -1,6 +1,11 @@
 import { supabase } from '../lib/supabase';
 import type { ParsedRow } from '../lib/excel';
-import { planLibriExport } from '../lib/libriExportPlan';
+import {
+  planLibriExport,
+  restoreLibriExportPlan,
+  serializeLibriExportPlan,
+  type StoredLibriExportPlanPage,
+} from '../lib/libriExportPlan';
 import { getCached, invalidateCache } from '../lib/cache';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 import type { DbLibriExport } from '../types/database';
@@ -14,6 +19,7 @@ export type LibriExportRecord = {
   positionsCount: number;
   totalValue: number;
   meta: ParamasaPreviewMeta;
+  pageLayout: StoredLibriExportPlanPage[] | null;
   rows: ParsedRow[];
   createdAt: string;
 };
@@ -36,22 +42,29 @@ export type LibriDashboardSummary = {
 };
 
 function mapRecord(row: DbLibriExport): LibriExportRecord {
+  const { __libriPageLayout, ...meta } = row.meta || {};
+  const rows = row.rows as unknown as ParsedRow[];
+  const restoredPlan = restoreLibriExportPlan(__libriPageLayout, rows);
   return {
     id: row.id,
     fileName: row.file_name,
     positionsCount: row.positions_count,
     totalValue: Number(row.total_value) || 0,
-    meta: row.meta as unknown as ParamasaPreviewMeta,
-    rows: row.rows as unknown as ParsedRow[],
+    meta: meta as unknown as ParamasaPreviewMeta,
+    pageLayout: restoredPlan ? serializeLibriExportPlan(restoredPlan, rows) : null,
+    rows,
     createdAt: row.created_at,
   };
 }
 
-function getPagesCount(rows: ParsedRow[] | undefined | null): number {
+function getPagesCount(rows: ParsedRow[] | undefined | null, pageLayout?: StoredLibriExportPlanPage[] | null): number {
   if (!Array.isArray(rows) || rows.length === 0) return 0;
 
   const validRows = rows.filter((row): row is ParsedRow => Boolean(row) && typeof row === 'object' && 'position_number' in row);
   if (validRows.length === 0) return rows.length;
+
+  const restoredPlan = restoreLibriExportPlan(pageLayout, validRows);
+  if (restoredPlan) return restoredPlan.length;
 
   try {
     return planLibriExport(validRows).length;
@@ -60,27 +73,42 @@ function getPagesCount(rows: ParsedRow[] | undefined | null): number {
   }
 }
 
-/** Ruan një "libër ndërtimor" të analizuar (rows + meta), për t'u rishkarkuar më vonë pa
- * ringarkuar skedarin origjinal. Thirret çdo herë që një paramasë analizohet me sukses,
- * jo vetëm kur shkarkohet — dështon në heshtje nëse tabela s'ekziston ende (migrim i pa bërë). */
-export async function saveLibriExportRecord(fileName: string, rows: ParsedRow[], meta: ParamasaPreviewMeta): Promise<void> {
-  if (!supabase) return;
+/** Ruani të dhënat e paramasës dhe ktheni identifikuesin për lidhjen e ndarjes manuale. */
+export async function saveLibriExportRecord(fileName: string, rows: ParsedRow[], meta: ParamasaPreviewMeta): Promise<string | null> {
+  if (!supabase) return null;
   const totalValue = rows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
-  try {
-    const { error } = await supabase.from('libri_exports').insert([
-      {
-        file_name: fileName,
-        positions_count: rows.length,
-        total_value: Number(totalValue.toFixed(2)),
-        meta,
-        rows,
-      },
-    ]);
-    if (!error) invalidateCache(LIBRI_EXPORTS_CACHE_KEY);
-  } catch {
-    // tabela libri_exports mund të mos ekzistojë ende (migrim i pa ekzekutuar) — s'duam ta
-    // ndalojmë rrjedhën kryesore të importit për këtë.
-  }
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from('libri_exports').insert([
+    {
+      id,
+      file_name: fileName,
+      positions_count: rows.length,
+      total_value: Number(totalValue.toFixed(2)),
+      meta,
+      rows,
+    },
+  ]);
+  if (error) throw error;
+  invalidateCache(LIBRI_EXPORTS_CACHE_KEY);
+  return id;
+}
+
+export async function saveLibriExportPageLayout(
+  id: string,
+  meta: ParamasaPreviewMeta,
+  pageLayout: StoredLibriExportPlanPage[] | null
+): Promise<void> {
+  if (!supabase) throw new Error('Supabase nuk është i lidhur.');
+  const storedMeta = pageLayout ? { ...meta, __libriPageLayout: pageLayout } : meta;
+  const { data, error } = await supabase
+    .from('libri_exports')
+    .update({ meta: storedMeta })
+    .eq('id', id)
+    .select('id')
+    .single();
+  if (error) throw error;
+  if (!data?.id) throw new Error('Ndarja e faqeve nuk u ruajt në regjistrin e Librit.');
+  invalidateCache(LIBRI_EXPORTS_CACHE_KEY);
 }
 
 export function summarizeLibriExportRecords(records: LibriExportRecord[]): LibriDashboardSummary {
@@ -90,7 +118,7 @@ export function summarizeLibriExportRecords(records: LibriExportRecord[]): Libri
       id: record.id,
       fileName: record.fileName,
       positionsCount: Number(record.positionsCount) || 0,
-      pagesCount: getPagesCount(record.rows),
+      pagesCount: getPagesCount(record.rows, record.pageLayout),
       totalValue: Number(record.totalValue) || 0,
       createdAt: record.createdAt,
     }));
@@ -115,7 +143,8 @@ export async function fetchLibriExportRecords(): Promise<LibriExportRecord[]> {
     LIBRI_EXPORTS_CACHE_KEY,
     async () => {
       const { data, error } = await client.from('libri_exports').select('*').order('created_at', { ascending: false }).limit(50);
-      if (error || !data) return [];
+      if (error) throw new Error(`Historiku i Librit nuk u ngarkua: ${error.message}`);
+      if (!data) throw new Error('Databaza nuk ktheu të dhëna për historikun e Librit.');
       return (data as DbLibriExport[]).map(mapRecord);
     },
     LIBRI_EXPORTS_CACHE_TTL_MS

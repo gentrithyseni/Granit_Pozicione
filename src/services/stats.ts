@@ -7,6 +7,8 @@ export async function fetchDashboardStats() {
     supabase.from('categories').select('*', { count: 'exact', head: true }),
     supabase.from('project_items').select('*', { count: 'exact', head: true }),
   ]);
+  const failedQuery = [projectsRes, categoriesRes, itemsRes].find((result) => result.error);
+  if (failedQuery?.error) throw new Error(`Statistikat e ballinës nuk u ngarkuan: ${failedQuery.error.message}`);
   return {
     projects: projectsRes.count || 0,
     categories: categoriesRes.count || 0,

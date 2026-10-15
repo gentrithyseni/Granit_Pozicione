@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronLeft, ChevronRight, Download, Eye, Trash2 } from 'lucide-react';
 import { ParamasaPreview, type ParamasaPreviewMeta, type PageGroupingMode } from '../components/ParamasaPreview';
@@ -7,8 +7,23 @@ import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
 import { parseExcelWithValidation, type ParsedRow } from '../lib/excel';
 import { groupRowsBySection } from '../lib/paramasaPreview';
-import { buildLibriNdertimorWorkbook, buildLibriNdertimorZip, downloadWorkbookBuffer, downloadBlob, planLibriExport, type LibriExportPlanPage } from '../lib/libriExport';
-import { saveLibriExportRecord, fetchLibriExportRecords, deleteLibriExportRecord, type LibriExportRecord } from '../services/libriExports';
+import {
+  buildLibriNdertimorWorkbook,
+  buildLibriNdertimorZip,
+  downloadWorkbookBuffer,
+  downloadBlob,
+  planLibriExport,
+  restoreLibriExportPlan,
+  serializeLibriExportPlan,
+  type LibriExportPlanPage,
+} from '../lib/libriExport';
+import {
+  saveLibriExportRecord,
+  saveLibriExportPageLayout,
+  fetchLibriExportRecords,
+  deleteLibriExportRecord,
+  type LibriExportRecord,
+} from '../services/libriExports';
 import { supabase } from '../lib/supabase';
 import type { DbProject } from '../types/database';
 
@@ -70,6 +85,7 @@ export function ImportPage() {
   const [sectionTitleOverrides, setSectionTitleOverrides] = useState<Record<string, string>>({});
   const [groupingMode, setGroupingMode] = useState<PageGroupingMode>('auto');
   const [manualPlan, setManualPlan] = useState<LibriExportPlanPage[] | null>(null);
+  const [currentLibriExportId, setCurrentLibriExportId] = useState<string | null>(null);
 
   const detectedSections = useMemo(() => groupRowsBySection(rows), [rows]);
   const autoPlan = useMemo(
@@ -104,11 +120,18 @@ export function ImportPage() {
   const [libriHistory, setLibriHistory] = useState<LibriExportRecord[]>([]);
   const [libriHistoryPage, setLibriHistoryPage] = useState(1);
   const [viewingHistoryId, setViewingHistoryId] = useState<string | null>(null);
+  const [historyGroupingMode, setHistoryGroupingMode] = useState<PageGroupingMode>('auto');
+  const [historyManualPlan, setHistoryManualPlan] = useState<LibriExportPlanPage[] | null>(null);
   const [historyActionId, setHistoryActionId] = useState<string | null>(null);
   const { showToast } = useToast();
+  const layoutSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
   const reloadLibriHistory = () => {
-    fetchLibriExportRecords().then(setLibriHistory);
+    void fetchLibriExportRecords()
+      .then(setLibriHistory)
+      .catch((error: unknown) => {
+        showToast(error instanceof Error ? error.message : 'Historiku i Librit nuk u ngarkua.', 'error');
+      });
   };
 
   const libriHistoryPageSize = 5;
@@ -124,9 +147,122 @@ export function ImportPage() {
 
   useEffect(() => {
     if (!supabase) return;
-    supabase.from('projects').select('*').order('created_at', { ascending: false }).then(({ data }) => data && setProjects(data));
+    void (async () => {
+      try {
+        const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+        if (error) {
+          showToast(`Projektet nuk u ngarkuan: ${error.message}`, 'error');
+          return;
+        }
+        if (data) setProjects(data);
+      } catch (error) {
+        showToast(error instanceof Error ? `Projektet nuk u ngarkuan: ${error.message}` : 'Projektet nuk u ngarkuan.', 'error');
+      }
+    })();
     reloadLibriHistory();
   }, []);
+
+  useEffect(() => {
+    const historyRecord = viewingHistoryId
+      ? libriHistory.find((record) => record.id === viewingHistoryId) ?? null
+      : null;
+    const targetId = historyRecord?.id ?? (!viewingHistoryId ? currentLibriExportId : null);
+    if (!targetId) return;
+
+    const sourceRows = historyRecord?.rows ?? rows;
+    const meta = historyRecord?.meta ?? previewMeta;
+    const currentMode = historyRecord ? historyGroupingMode : groupingMode;
+    const currentPlan = historyRecord ? historyManualPlan : manualPlan;
+    const storedPlan = currentMode === 'manual' && currentPlan
+      ? serializeLibriExportPlan(currentPlan, sourceRows)
+      : null;
+    const persistedRecord = libriHistory.find((record) => record.id === targetId);
+
+    if (currentMode === 'manual' && currentPlan && !storedPlan) {
+      showToast('Ndarja e faqeve nuk u ruajt sepse disa pozicione mungojnë ose janë të përsëritura.', 'error');
+      return;
+    }
+    if (persistedRecord && JSON.stringify(persistedRecord.pageLayout) === JSON.stringify(storedPlan)) return;
+
+    let active = true;
+    const timeoutId = window.setTimeout(() => {
+      const saveOperation = layoutSaveQueue.current
+        .then(() => saveLibriExportPageLayout(targetId, meta, storedPlan))
+        .then(() => {
+          if (!active) return;
+          setLibriHistory((current) => {
+            const record = current.find((item) => item.id === targetId);
+            if (!record || JSON.stringify(record.pageLayout) === JSON.stringify(storedPlan)) return current;
+            return current.map((item) => item.id === targetId ? { ...item, pageLayout: storedPlan } : item);
+          });
+        })
+        .catch((error: unknown) => {
+          if (active) {
+            showToast(
+              error instanceof Error
+                ? `Ndarja e faqeve nuk u ruajt: ${error.message}`
+                : 'Ndarja e faqeve nuk u ruajt.',
+              'error'
+            );
+          }
+        });
+      layoutSaveQueue.current = saveOperation;
+    }, 500);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    currentLibriExportId,
+    groupingMode,
+    historyGroupingMode,
+    historyManualPlan,
+    libriHistory,
+    manualPlan,
+    previewMeta,
+    rows,
+    showToast,
+    viewingHistoryId,
+  ]);
+
+  const persistLayoutNow = async (
+    id: string,
+    meta: ParamasaPreviewMeta,
+    sourceRows: ParsedRow[],
+    mode: PageGroupingMode,
+    plan: LibriExportPlanPage[] | null
+  ): Promise<boolean> => {
+    const storedPlan = mode === 'manual' && plan
+      ? serializeLibriExportPlan(plan, sourceRows)
+      : null;
+    if (mode === 'manual' && plan && !storedPlan) {
+      showToast('Ndarja e faqeve nuk u ruajt sepse disa pozicione mungojnë ose janë të përsëritura.', 'error');
+      return false;
+    }
+    const persistedRecord = libriHistory.find((record) => record.id === id);
+    if (persistedRecord && JSON.stringify(persistedRecord.pageLayout) === JSON.stringify(storedPlan)) return true;
+
+    const saveOperation = layoutSaveQueue.current.then(() => saveLibriExportPageLayout(id, meta, storedPlan));
+    layoutSaveQueue.current = saveOperation.catch(() => undefined);
+    try {
+      await saveOperation;
+      setLibriHistory((current) => {
+        const record = current.find((item) => item.id === id);
+        if (!record || JSON.stringify(record.pageLayout) === JSON.stringify(storedPlan)) return current;
+        return current.map((item) => item.id === id ? { ...item, pageLayout: storedPlan } : item);
+      });
+      return true;
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? `Ndarja e faqeve nuk u ruajt: ${error.message}`
+          : 'Ndarja e faqeve nuk u ruajt.',
+        'error'
+      );
+      return false;
+    }
+  };
 
   // Vetëm plotëson fushat ende bosh kur zgjidhet një projekt — s'e prek asnjë fushë që
   // përdoruesi e ka shkruar tashmë vetë (rregullim i raportuar: muaji/objekti fshiheshin
@@ -146,6 +282,9 @@ export function ImportPage() {
     const file = event.target.files?.[0];
     if (!file) return;
     setLoading(true);
+    setCurrentLibriExportId(null);
+    setGroupingMode('auto');
+    setManualPlan(null);
     setFileName(file.name);
     setRows([]);
     setDeclaredTotal(null);
@@ -174,8 +313,19 @@ export function ImportPage() {
       }
 
       if (parsedRows.length > 0) {
-        await saveLibriExportRecord(file.name, parsedRows, mergedMeta);
-        reloadLibriHistory();
+        try {
+          const recordId = await saveLibriExportRecord(file.name, parsedRows, mergedMeta);
+          setCurrentLibriExportId(recordId);
+          if (recordId) reloadLibriHistory();
+          else if (supabase) showToast('Paramasa u lexua, por nuk u ruajt në historikun e Librit.', 'error');
+        } catch (error) {
+          showToast(
+            error instanceof Error
+              ? `Paramasa u lexua, por nuk u ruajt në historikun e Librit: ${error.message}`
+              : 'Paramasa u lexua, por nuk u ruajt në historikun e Librit.',
+            'error'
+          );
+        }
       }
     } catch {
       showToast('Gabim gjatë leximit të Excel-it.', 'error');
@@ -207,6 +357,9 @@ export function ImportPage() {
     setLibriExportLoading(true);
     try {
       const plan = activePlan;
+      const layoutSaved = currentLibriExportId
+        ? await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, plan)
+        : !supabase;
       const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta, undefined, sectionTitleOverrides, plan);
       downloadWorkbookBuffer(buffer, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
       const overflowPages = plan.filter((page) => page.overflowWarning).length;
@@ -218,6 +371,9 @@ export function ImportPage() {
         showToast(`Skedari u shkarkua (${plan.length} faqe). Kontrollo: ${parts.join(', ')}.`, 'info');
       } else {
         showToast(`Skedari u shkarkua: ${plan.length} faqe në formatin origjinal.`, 'success');
+      }
+      if (!layoutSaved && !currentLibriExportId && supabase) {
+        showToast('Skedari u shkarkua, por Libri nuk ka identifikues për ruajtjen e ndarjes në histori.', 'error');
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Gabim gjatë gjenerimit të Librit Ndërtimor.', 'error');
@@ -231,9 +387,15 @@ export function ImportPage() {
     setZipExportLoading(true);
     try {
       const plan = activePlan;
+      const layoutSaved = currentLibriExportId
+        ? await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, plan)
+        : !supabase;
       const blob = await buildLibriNdertimorZip(rows, previewMeta, undefined, sectionTitleOverrides, plan);
       downloadBlob(blob, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor-faqet.zip`);
       showToast(`ZIP u shkarkua: ${plan.length} skedarë, një për çdo faqe.`, 'success');
+      if (!layoutSaved && !currentLibriExportId && supabase) {
+        showToast('ZIP u shkarkua, por Libri nuk ka identifikues për ruajtjen e ndarjes në histori.', 'error');
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Gabim gjatë gjenerimit të ZIP.', 'error');
     } finally {
@@ -242,19 +404,55 @@ export function ImportPage() {
   };
 
   const handleUpdateRow = (row: ParsedRow, changes: Partial<ParsedRow>) => {
-    setRows((current) => current.map((r) => (r === row ? { ...r, ...changes } : r)));
+    const updatedRow = { ...row, ...changes };
+    setRows((current) => current.map((r) => (r === row ? updatedRow : r)));
+    setManualPlan((current) => current?.map((page) => ({
+      ...page,
+      rows: page.rows.map((planRow) => (planRow === row ? updatedRow : planRow)),
+    })) ?? null);
   };
 
   const handleRedownloadHistory = async (record: LibriExportRecord) => {
     setHistoryActionId(record.id);
     try {
-      const buffer = await buildLibriNdertimorWorkbook(record.rows, record.meta);
+      const pageLayout = viewingHistoryId === record.id && historyGroupingMode === 'manual'
+        ? historyManualPlan
+        : restoreLibriExportPlan(record.pageLayout, record.rows);
+      if (viewingHistoryId === record.id && historyGroupingMode === 'manual') {
+        await persistLayoutNow(record.id, record.meta, record.rows, historyGroupingMode, historyManualPlan);
+      }
+      const buffer = await buildLibriNdertimorWorkbook(record.rows, record.meta, undefined, undefined, pageLayout ?? undefined);
       downloadWorkbookBuffer(buffer, `${normalizeBaseName(record.fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Gabim gjatë rigjenerimit.', 'error');
     } finally {
       setHistoryActionId(null);
     }
+  };
+
+  const handleToggleHistoryPreview = async (record: LibriExportRecord) => {
+    if (viewingHistoryId) {
+      const openRecord = libriHistory.find((item) => item.id === viewingHistoryId);
+      if (openRecord) {
+        const saved = await persistLayoutNow(
+          openRecord.id,
+          openRecord.meta,
+          openRecord.rows,
+          historyGroupingMode,
+          historyManualPlan
+        );
+        if (!saved) return;
+      }
+      if (viewingHistoryId === record.id) {
+        setViewingHistoryId(null);
+        return;
+      }
+    }
+
+    const savedPlan = restoreLibriExportPlan(record.pageLayout, record.rows);
+    setHistoryGroupingMode(savedPlan ? 'manual' : 'auto');
+    setHistoryManualPlan(savedPlan);
+    setViewingHistoryId(record.id);
   };
 
   const handleDeleteHistory = async (id: string) => {
@@ -271,6 +469,14 @@ export function ImportPage() {
     } finally {
       setHistoryActionId(null);
     }
+  };
+
+  const handleFinish = async () => {
+    if (currentLibriExportId && rows.length > 0) {
+      const saved = await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, activePlan);
+      if (!saved) return;
+    }
+    navigate('/');
   };
 
   return (
@@ -346,19 +552,19 @@ export function ImportPage() {
             </label>
             <label className="full-width-field">
               Objekti
-              <input value={previewMeta.objectName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, objectName: e.target.value }))} placeholder="p.sh. Renovimi i dyshemesë në MIQ" />
+              <input value={previewMeta.objectName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, objectName: e.target.value }))} placeholder="p.sh Renovimi i dyshemesë në MIQ" />
             </label>
             <label>
-              Llogaria me oferte
-              <input value={previewMeta.offerAccount} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerAccount: e.target.value }))} placeholder="p.sh. No 01/2026" />
+              Numri i kapitullit ne paramase
+              <input value={previewMeta.offerAccount} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerAccount: e.target.value }))} placeholder="p.sh I ose II" />
             </label>
             <label>
               Pozicioni me oferte
-              <input value={previewMeta.offerPositions} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerPositions: e.target.value }))} placeholder="p.sh. 1.1, 1.2" />
+              <input value={previewMeta.offerPositions} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerPositions: e.target.value }))} placeholder="p.sh 1.1, 1.2" />
             </label>
             <label className="full-width-field">
-              Titulli i seksionit
-              <input value={previewMeta.sectionTitle} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, sectionTitle: e.target.value }))} placeholder="p.sh. I. Punimet përgatitore" />
+              Titulli i seksionit-kapitullit
+              <input value={previewMeta.sectionTitle} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, sectionTitle: e.target.value }))} placeholder="p.sh I. Punimet përgatitore" />
             </label>
           </div>
         </div>
@@ -497,7 +703,7 @@ export function ImportPage() {
               <button
                 className="primary-button import-finish-btn"
                 type="button"
-                onClick={() => navigate('/')}
+                onClick={handleFinish}
                 disabled={loading || rows.length === 0 || libriExportLoading || zipExportLoading}
               >
                 <Check size={16} />
@@ -525,7 +731,7 @@ export function ImportPage() {
                     <button
                       type="button"
                       className="card libri-history-action-btn"
-                      onClick={() => setViewingHistoryId(viewingHistoryId === record.id ? null : record.id)}
+                      onClick={() => handleToggleHistoryPreview(record)}
                     >
                       <Eye size={15} />
                       {viewingHistoryId === record.id ? 'Mbyll pamjen' : 'Shiko'}
@@ -552,7 +758,15 @@ export function ImportPage() {
 
                   {viewingHistoryId === record.id && (
                     <div className="libri-history-preview">
-                      <ParamasaPreview rows={record.rows} meta={record.meta} />
+                      <ParamasaPreview
+                        rows={record.rows}
+                        meta={record.meta}
+                        groupingMode={historyGroupingMode}
+                        onGroupingModeChange={setHistoryGroupingMode}
+                        manualPlan={historyManualPlan}
+                        onManualPlanChange={setHistoryManualPlan}
+                        onPlanError={(message) => showToast(message, 'error')}
+                      />
                     </div>
                   )}
                 </div>

@@ -24,7 +24,7 @@ const K = {
   issuerBankRow: 16, issuerBankCol: 1, // A16
   contractBlockRow: 19,                 // A19:J20 (merged)
   clientNameCell: 'H12',               // H12:K14 (merged)
-  clientAddressCell: 'H16',            // H16:J16 (merged)
+  clientAddressCell: 'H16',            // H16:K16 (merged)
   perCell: 'H11',
   titleCell: 'A30',    // A30:C36 — NJË qelizë e bashkuar
   contractNumCell: 'D30',  // D30:E31 — NJË qelizë e bashkuar
@@ -64,10 +64,8 @@ function parseNumber(value: string): number | null {
   return Number.isFinite(n) && value.trim() !== '' ? n : null;
 }
 
-function applyA4PrintSetup(ws: ExcelJS.Worksheet): void {
+function applyA4PrintSetup(ws: ExcelJS.Worksheet, lastColLetter: string): void {
   const lastRow = ws.dimensions?.bottom || ws.rowCount || 44;
-  const lastCol = ws.dimensions?.right || ws.columnCount || 11;
-  const lastColLetter = String.fromCharCode(64 + Math.min(lastCol, 26));
   ws.pageSetup = {
     ...ws.pageSetup,
     paperSize: 9,
@@ -91,6 +89,56 @@ function safeMergeCells(ws: ExcelJS.Worksheet, range: string): boolean {
   } catch (error) {
     console.warn(`Nuk mundesh të bashkosh qeliza ${range}:`, error instanceof Error ? error.message : String(error));
     return false;
+  }
+}
+
+function applyMergedRangeBorders(ws: ExcelJS.Worksheet, range: string, borders: Partial<ExcelJS.Borders>): void {
+  const parseAddress = (address: string) => {
+    const match = /^([A-Z]+)(\d+)$/.exec(address);
+    if (!match) throw new Error(`Koordinata e qelizës nuk është e vlefshme: ${address}`);
+    const column = Array.from(match[1]).reduce((value, char) => value * 26 + char.charCodeAt(0) - 64, 0);
+    return { row: Number(match[2]), column };
+  };
+  const [startAddress, endAddress] = range.split(':');
+  const start = parseAddress(startAddress);
+  const end = parseAddress(endAddress);
+
+  for (let row = start.row; row <= end.row; row++) {
+    for (let column = start.column; column <= end.column; column++) {
+      const cell = ws.getCell(row, column);
+      const border = { ...cell.border };
+      if (row === start.row && borders.top) border.top = borders.top;
+      if (row === end.row && borders.bottom) border.bottom = borders.bottom;
+      if (column === start.column && borders.left) border.left = borders.left;
+      if (column === end.column && borders.right) border.right = borders.right;
+      cell.border = border;
+    }
+  }
+}
+
+function applyInvoiceTableOutline(ws: ExcelJS.Worksheet): void {
+  applyMergedRangeBorders(ws, 'A27:J36', {
+    top: { style: 'medium' },
+    bottom: { style: 'medium' },
+    left: { style: 'medium' },
+    right: { style: 'medium' },
+  });
+  for (let row = 27; row <= 36; row++) {
+    for (const column of [8, 9, 10]) {
+      const cell = ws.getCell(row, column);
+      cell.border = {
+        ...cell.border,
+        left: { style: 'medium' },
+        ...(column === 10 ? { right: { style: 'medium' } } : {}),
+      };
+    }
+  }
+
+  for (let row = 30; row <= 36; row++) {
+    const contractNumberEdge = ws.getCell(row, 5);
+    const border = { ...contractNumberEdge.border };
+    delete border.right;
+    contractNumberEdge.border = border;
   }
 }
 
@@ -156,8 +204,8 @@ function fillKontrate(ws: ExcelJS.Worksheet, d: FaturaKontrateFields): void {
   ws.getCell(K.totalRow, 8).value = { formula: `J${K.totalRow}/1.18` };
   ws.getCell(K.totalRow, 9).value = { formula: `J${K.totalRow}-H${K.totalRow}` };
 
-  // H12:K14 — klienti (safeUnmerge+mergeCells ruan master cell por mund t'i heqë bordet)
-  const clientBorders: Partial<ExcelJS.Borders> = { top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
+  // H12:K14 — klienti; kufiri i sipërm krijon vijë të panevojshme nën "PËR:".
+  const clientBorders: Partial<ExcelJS.Borders> = { left: { style: 'medium' }, right: { style: 'medium' } };
   safeMergeCells(ws, 'H12:K14');
   const clientCell = ws.getCell(K.clientNameCell);
   clientCell.value = [d.clientName, d.clientNameLine2].filter(Boolean).join('\n');
@@ -165,16 +213,18 @@ function fillKontrate(ws: ExcelJS.Worksheet, d: FaturaKontrateFields): void {
   clientCell.font = { name: 'Cambria', size: 18, bold: true };
   clientCell.fill = PEACH_FILL;
   clientCell.border = clientBorders;
+  applyMergedRangeBorders(ws, 'H12:K14', clientBorders);
 
-  // H16:J16 — adresa
+  // H16:K16 — adresa; shtrihet deri te skaji i jashtëm i bllokut të klientit.
   const addressBorders: Partial<ExcelJS.Borders> = { bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
-  safeMergeCells(ws, 'H16:J16');
+  safeMergeCells(ws, 'H16:K16');
   const addressCell = ws.getCell(K.clientAddressCell);
   addressCell.value = ` Adresa  : ${d.clientAddress}`;
   addressCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
   addressCell.font = { name: 'Cambria', size: 11, bold: true };
   addressCell.fill = PEACH_FILL;
   addressCell.border = addressBorders;
+  applyMergedRangeBorders(ws, 'H16:K16', addressBorders);
 
   // "PËR" label
   const perLabel = ws.getCell(K.perCell);
@@ -184,7 +234,8 @@ function fillKontrate(ws: ExcelJS.Worksheet, d: FaturaKontrateFields): void {
 
   ws.getCell('A16').font = { name: 'Cambria', size: 14, bold: true };
 
-  applyA4PrintSetup(ws);
+  applyInvoiceTableOutline(ws);
+  applyA4PrintSetup(ws, 'K');
 }
 
 // ── Fletëdërgesë: fill ───────────────────────────────────────────────────────
@@ -262,7 +313,7 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
   };
 
   // Klienti G13:J15 — restauro bordet medium pas merge
-  const clientBordersP: Partial<ExcelJS.Borders> = { top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
+  const clientBordersP: Partial<ExcelJS.Borders> = { left: { style: 'medium' }, right: { style: 'medium' } };
   safeMergeCells(ws, 'G13:J15');
   const clientCell = ws.getCell(P.clientNameCell);
   clientCell.value = [d.clientName, d.clientNameLine2].filter(Boolean).join('\n');
@@ -270,6 +321,7 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
   clientCell.font = { name: 'Cambria', size: 18, bold: true };
   clientCell.fill = PEACH_FILL;
   clientCell.border = clientBordersP;
+  applyMergedRangeBorders(ws, 'G13:J15', clientBordersP);
 
   // Adresa G17:J17 — master=G17, restauro bordet medium
   const addressBordersP: Partial<ExcelJS.Borders> = { bottom: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } };
@@ -280,6 +332,7 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
   addressCell.font = { name: 'Cambria', size: 11, bold: true };
   addressCell.fill = PEACH_FILL;
   addressCell.border = addressBordersP;
+  applyMergedRangeBorders(ws, 'G17:J17', addressBordersP);
   // G16 mund të ketë mbetje — pastro
   ws.getCell('G16').value = '';
 
@@ -289,7 +342,7 @@ function fillPozicione(ws: ExcelJS.Worksheet, d: FaturaPozicioneFields): void {
 
   ws.getCell('A17').font = { name: 'Cambria', size: 14, bold: true };
 
-  applyA4PrintSetup(ws);
+  applyA4PrintSetup(ws, 'J');
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────

@@ -1,504 +1,262 @@
-# TEMË DIPLOME
+# Udhëzues për ta kuptuar projektin
 
-## Të dhëna bazë
+> Ky dokument është për autorin e projektit: shpjegon arkitekturën, rrjedhat, formulat, kufijtë dhe arsyetimet teknike në më shumë hollësi. **Nuk është versioni për t'ia dërguar mentorit.** Për draftin formal përdor [DOKUMENTI_DIPLOMES.html](./DOKUMENTI_DIPLOMES.html).
 
-- **Universiteti:** [Plotëso]
-- **Fakulteti:** [Plotëso]
-- **Departamenti / Programi:** Inxhinieri Softuerike / Shkenca Kompjuterike
-- **Studenti:** [Emri Mbiemri]
-- **Numri i indeksit:** [Plotëso]
-- **Mentori:** [Plotëso]
-- **Viti akademik:** 2025/2026
-- **Titulli i temës:** Zhvillim i Sistemit për Vlerësimin e Ofertave dhe Menaxhimin e të Dhënave në Projekte
+## 1. Në një fjali: çfarë bën aplikacioni?
 
----
+Është një aplikacion web për të organizuar ofertat e projekteve ndërtimore: regjistron pozicione dhe kosto, importon paramasa nga Excel, i ndan pozicionet në faqe sipas shablloneve, gjeneron dokumente dhe jep kërkim e analiza mbi të dhënat e ruajtura.
 
-## Përmbledhje
+Sistemi nuk llogarit vetë sasitë inxhinierike nga vizatimet dhe nuk është sistem kontabiliteti. Ai përpunon të dhënat që i jep përdoruesi ose që lexon nga Excel.
 
-Ky projekt paraqet zhvillimin e një sistemi web për vlerësimin e ofertave dhe menaxhimin e të dhënave në projekte. Zgjidhja është ndërtuar për të zëvendësuar punën manuale të shpërndarë në skedarë Excel dhe dokumente të ndryshme me një sistem të centralizuar, të strukturuar dhe të shpejtë për përdorim.
+## 2. Si është i organizuar kodi?
 
-Aplikacioni mundëson regjistrim manual të pozicioneve, import të të dhënave nga Excel, llogaritje dhe vlerësim të ofertave, gjenerim të dokumenteve, krahasim të projekteve dhe kategorive, kërkim global në të dhëna, si dhe menaxhim të llogarisë së përdoruesit. Për realizimin e projektit janë përdorur React, TypeScript, Vite, Supabase dhe biblioteka të tjera ndihmëse për forma, eksportim dhe vizualizim të të dhënave.
+| Vendndodhja | Roli |
+|---|---|
+| [App.tsx](./App.tsx) | Provider-at e aplikacionit, rrugët (routes) dhe ngarkimi i faqeve. |
+| [src/pages/](./src/pages/) | Faqet: ballina, regjistrimi, importi, fatura, kërkimi, të dhënat dhe profili. |
+| [src/components/](./src/components/) | Komponentë të ripërdorshëm, si Shell, kartat e pozicioneve, preview dhe grafikët. |
+| [src/services/](./src/services/) | Kërkesa te Supabase dhe veprime të domenit, p.sh. ruajtja e pozicionit ose raportet. |
+| [src/lib/](./src/lib/) | Llogaritje dhe përpunim i pavarur nga UI-ja: çmime, Excel, faqosje, validim, cache. |
+| [src/context/](./src/context/) | Gjendje globale për autentikim, temë dhe njoftime. |
+| [src/types/](./src/types/) | Modele TypeScript për dokumentet dhe metadata-n. |
+| [public/templates/](./public/templates/) | Shabllonet Excel që përdoren gjatë eksportit. |
+| [supabase/migrations/](./supabase/migrations/) | Ndryshime skeme dhe funksione SQL që duhen aplikuar në Supabase. |
 
-Ky dokument është hartuar duke u bazuar në kodin dhe skedarët ekzistues të repository-t, përfshirë [App.tsx](App.tsx), faqet në [src/pages](src/pages), shërbimet në [src/services](src/services), tipet dhe migration-in e sigurisë në [src/types/database.ts](src/types/database.ts) dhe [supabase/user-approval.sql](supabase/user-approval.sql), si dhe materialet shembull në folderët [Fatura](Fatura) dhe [Paramasa](Paramasa).
-
-## Fjalë kyçe
-
-Vlerësim ofertash, menaxhim të dhënash, paramasa, aplikacion web, React, TypeScript, Supabase, Excel, menaxhim projektesh.
-
-## 1. Hyrje
-
-Në sektorin e ndërtimit, menaxhimi i ofertave, paramasave dhe dokumentacionit mbështetet shpesh në skedarë Excel, dokumente manuale dhe përpunim të përsëritur të të dhënave. Kjo qasje rrit mundësinë për gabime, e ngadalëson procesin dhe e vështirëson kërkimin ose krahasimin e të dhënave historike.
-
-Ky projekt është zhvilluar për të adresuar këto probleme përmes një platforme web që centralizon të dhënat, automatizon llogaritjet kryesore dhe ofron mjete për analizë, eksport dhe kërkim.
-
-## 2. Problemi që zgjidhet
-
-Problemet kryesore që trajton projekti janë:
-
-- ruajtja e shpërndarë e të dhënave në Excel dhe dokumente manuale,
-- llogaritje të përsëritura dhe të ndjeshme ndaj gabimeve,
-- mungesë e kërkimit të shpejtë në të dhëna,
-- mungesë e historikut të çmimeve dhe krahasimit të projekteve,
-- vështirësi në gjenerimin e dokumentacionit të standardizuar si Libri Ndërtimor dhe faturat.
-
-## 3. Qëllimi i projektit
-
-Qëllimi i këtij projekti është ndërtimi i një sistemi web që:
-
-- lehtëson futjen dhe menaxhimin e pozicioneve të punës,
-- importon dhe përpunon të dhëna nga Excel,
-- gjeneron dokumente dhe faqe të standardizuara për Libër Ndërtimor,
-- ofron analizë të të dhënave dhe statistika,
-- ruan të dhënat në mënyrë të sigurt dhe të organizuar,
-- mbështet autentikim dhe kontroll të aksesit të përdoruesve.
-
-## 4. Objektivat
-
-- Të krijohet një panel administrativ për menaxhim të projekteve ndërtimore.
-- Të automatizohet llogaritja e çmimeve dhe totalit për pozicione.
-- Të mundësohet importi i paramasave nga Excel.
-- Të krijohet preview i saktë para eksportit final.
-- Të mundësohet gjenerimi i Librit Ndërtimor në format Excel dhe ZIP.
-- Të realizohet kërkim global në të dhëna.
-- Të sigurohet autentikim i përdoruesve dhe mbrojtje e faqeve.
-- Të ofrohen analiza për projekte, kategori dhe historik çmimesh.
-
-## 5. Metodologjia e punës
-
-Puna është zhvilluar me një metodologji praktike të orientuar drejt implementimit, duke ndjekur këto hapa:
-
-1. Analiza e problemit dhe identifikimi i nevojave në procesin e punës së ndërtimit.
-2. Definimi i funksioneve kryesore të aplikacionit.
-3. Dizajnimi i strukturës së faqeve dhe rrjedhës së përdorimit.
-4. Ndërtimi i komponentëve të ripërdorshëm për UI.
-5. Implementimi i logjikës së biznesit për llogaritje, import dhe eksport.
-6. Integrimi me Supabase për databazë dhe autentikim.
-7. Testimi i funksioneve kryesore me të dhëna reale dhe skedarë Excel.
-8. Përmirësimi i preview, validimit dhe eksportit për të shmangur mospërputhjet.
-
-Kjo metodologji është e përshtatshme për një temë diplome në inxhinieri softuerike, sepse kombinon analizë të problemit, arkitekturë software-i dhe implementim praktik.
-
-## 6. Teknologjitë e përdorura
-
-### 6.1 React 18
-
-React është përdorur për ndërtimin e ndërfaqes, sepse lejon ndarje të qartë në komponentë, menaxhim të gjendjes dhe ripërdorim të logjikës së UI-së.
-
-### 6.2 TypeScript
-
-TypeScript është përdorur për tipizim të të dhënave dhe ulje të gabimeve gjatë zhvillimit, sidomos në një sistem që punon me shumë entitete si projekte, kategori, pozicione dhe faturime.
-
-### 6.3 Vite
-
-Vite është përdorur si mjet build dhe development server për shkak të shpejtësisë dhe konfigurimit të thjeshtë.
-
-### 6.4 React Router 6
-
-React Router është përdorur për menaxhimin e navigimit ndërmjet faqeve pa rifreskim të plotë të shfletuesit.
-
-### 6.5 Supabase
-
-Supabase është përdorur si backend për:
-
-- autentikim,
-- databazë PostgreSQL,
-- politika RLS,
-- ruajtje dhe lexim të të dhënave.
-
-Në databazë përdoren tabelat kryesore `categories`, `projects`, `project_items`, `item_expenses`, `price_history`, `libri_exports` dhe `profiles`. Tabela `import_history` ekziston si strukturë legacy, por aktualisht nuk përdoret nga rrjedha e aplikacionit.
-
-### 6.6 Biblioteka ndihmëse
-
-- `react-hook-form` për forma,
-- `xlsx`, `exceljs` dhe `jszip` për Excel/ZIP,
-- `lucide-react` për ikona,
-- `victory` për grafikë,
-- `date-fns` për data,
-- utilitarë të brendshëm për validim, eksport dhe analizë.
-
-## 7. Arkitektura e sistemit
-
-Sistemi është ndarë në disa shtresa kryesore:
-
-- **Shtresa e prezantimit**: faqet dhe komponentët React.
-- **Shtresa e logjikës**: shërbimet dhe funksionet ndihmëse për llogaritje, validim dhe eksport.
-- **Shtresa e gjendjes globale**: Auth, Theme dhe Toast context.
-- **Shtresa e të dhënave**: Supabase / PostgreSQL.
-
-Kjo ndarje e bën projektin më të mirëmbajtshëm dhe më të kuptueshëm, duke ulur varësinë e çdo faqeje nga logjika e drejtpërdrejtë e bazës së të dhënave.
-
-### 7.1 Figurë statistikore e strukturës së projektit
-
-Për ta bërë dokumentin më të plotë vizualisht, projekti mund të paraqitet edhe me një figurë të thjeshtë statistikore që e përmbledh strukturën reale të repository-t:
-
-- faqe për dashboard, regjistrim, faturë, import, të dhëna, kërkim, profil dhe About Us,
-- komponentë të përbashkët për shell, autentikim, loading, preview, statistika dhe administrim,
-- shërbime biznesi për projekte, kategori, Libra Ndërtimor, statistika, kërkim dhe eksport,
-- module në `src/lib` për validim, kalkulim, paging, preview dhe eksport,
-- tabela operative për projekte, kategori, pozicione, shpenzime, historik çmimesh, Libra dhe profile.
-
-Kjo figurë tregon se projekti është i ndarë mirë në shtresa dhe module, gjë që është shumë e rëndësishme për mirëmbajtje dhe zgjerim të mëtejshëm.
-
-### 7.2 Rrjedha e të dhënave
-
-Rrjedha bazë e sistemit është:
-
-1. përdoruesi fut të dhëna manualisht ose ngarkon Excel,
-2. sistemi i kalon në validim,
-3. të dhënat ruhen në Supabase,
-4. output-i shfaqet si dashboard, preview ose eksport Excel/ZIP/JSON.
-
-Kjo e bën aplikacionin të përshtatshëm për përdorim praktik në menaxhimin e paramasave dhe dokumentacionit ndërtimor.
-
-### 7.3 Si lexohet dhe interpretohet Excel-i
-
-Një nga pjesët më të rëndësishme të sistemit është importi dhe interpretimi i të dhënave nga skedarët Excel. Ky proces është implementuar në mënyrë që aplikacioni të mos mbështetet vetëm në strukturën e një fletë të caktuar, por të jetë i aftë të lexojë dokumente realë të ndryshëm, me tituj të kolonave në gjuhë të ndryshme, renditje të ndryshme të kolonave dhe sekcione të ndara në të njëjtin skedar.
-
-Procesi fillon në faqen [src/pages/ImportPage.tsx](src/pages/ImportPage.tsx). Kur përdoruesi ngarkon një skedar, funksioni `handleFileUpload` thërret `parseExcelWithValidation(file)`, i vendosur në [src/lib/excel.ts](src/lib/excel.ts). Brenda këtij funksioni, skedari lexohet me bibliotekën `xlsx` në formatin e byte-array, dhe secila fletë Excel konvertohet në një matricë të rreshtave. Kjo është thelbësore sepse sistemi jo vetëm që lexon vlerat, por edhe identifikon strukturën logjike të dokumentit: ku fillon header-i, ku mbaron një seksion, ku ndodhen kolona e sasisë, kolona e çmimit dhe kolona e totals.
-
-Për të zbuluar kolona e duhura, sistemi nuk përdor indekse fikse të kolonave, por një metodë të bazuar në fjalëkyçe. Funksioni `detectColumnMap` kërkon qeliza që përmbajnë terma si `pershkrimi`, `njesia`, `sasia`, `cmimi`, `shuma`, dhe përkatësisht versionet e tyre në serbisht ose boshnjakisht, si `Opis`, `Kolicina`, `Cena`, `Ukupno`. Ky model u jep sistemit fleksibilitet të lartë, sepse një skedar i njëjtë mund të jetë i strukturuar ndryshe nga një dokument tjetër, por të interpretohet me të njëjtin logjik.
-
-Pas identifikimit të kolonave, funksioni `parseStructuredRows` fillon përpunimin e rreshtave individualë. Këtu sistemi bën një sërë kontrollesh të rëndësishme:
-
-- zbulon nëse një rresht është titull i një dokumenti ose oferte të re, jo një pozicion normal,
-- identifikon titujt e seksioneve, si për shembull një numër romak ose një seksion i shënuar si `II PUNËT E DEMOLIMIT`,
-- ndalon rreshtat e nënshkrimit ose të fundit të dokumentit,
-- bashkon rreshtat e vazhdueshëm ku një pozicion ka përshkrim të përgjithshëm, por sasinë dhe çmimin e vërtetë i ndanë në disa rreshta të mëvonshëm,
-- llogarit totalin e pozicionit si `quantity × unitPrice` ose sipas totalit të dhënë eksplicit nga skedari.
-
-Kjo qasje është e rëndësishme sepse në dokumentet reale të ndërtimit, të dhënat shpesh nuk janë perfekte. Ka raste ku një pozicion ka një rresht titulli dhe më pas disa rreshta të vazhdueshëm për variante të ndryshme, ose ku një dokument i ri fillon në të njëjtin skedar pas një seksioni tjetër. Sistemi e menaxhon këtë gjendje duke ruajtur kontekstin e seksionit dhe duke ndarë dokumentet në mënyrë logjike, për të mos përzier pozicione nga kategori ose tabela të ndryshme.
-
-Pas leximit të rreshtave, aplikacioni llogarit edhe totalin e deklaruar nga vetë skedari dhe e krahason me totalin e llogaritur nga sistemet. Nëse ka një devijim të madh, përdoruesi merr një paralajmërim. Kjo është shumë e rëndësishme në kontekstin e ndërtimit, ku një gabim i vogël në Excel mund të çojë në një vlerë të papërshtatshme të ofertës ose të dokumentit final. Ky funksionalitet është implementuar përmes `parseExcelWithValidation`, dhe lidhjen e saktë midis Excel-it dhe totalit të llogaritur e bën sistemin shumë më të besueshëm për përdorim praktik.
-
-Mekanizmi i importit nuk përfundon me leximin e të dhënave. Pas përpunimit, rrjedha vazhdon në [src/lib/paramasaPreview.ts](src/lib/paramasaPreview.ts), [src/lib/libriPaging.ts](src/lib/libriPaging.ts) dhe [src/lib/libriExport.ts](src/lib/libriExport.ts), ku rreshtat grupohen sipas seksioneve, planifikohen faqet, llogariten variablat e metadata-s dhe prodhohet preview para eksportit. Kështu, një skedar Excel nuk kalon thjesht si “tekst”, por shndërrohet në një model të strukturuar të pozicioneve, seksioneve dhe totalëve që përdoret më pas për eksportin e Librit Ndërtimor dhe për analizën e projekteve.
-
-Kjo është një nga pjesët më të interesantet e sistemit, sepse tregon se si një zgjidhje e bazuar në React dhe TypeScript mund të transformojë të dhëna të papërpunuara nga Excel në një model të organizuar dhe të përdorshëm në një aplikacion real të menaxhimit të projekteve ndërtimore.
-
-### 7.4 Logjika e grupimit, planifikimit të faqeve dhe metadata-s
-
-Pasi të dhënat e importuara janë të strukturuara, sistemi kalon në një nivel tjetër më kompleks: grupimin sipas seksioneve, vendosjen e faqeve dhe menaxhimin e metadata-s së dokumentit. Kjo është logjika që e bën aplikacionin jo vetëm një “parser Excel”, por një sistem real i përgatitjes së dokumentacionit ndërtimor.
-
-Pjesa e parë e këtij procesi ndodhet në [src/lib/paramasaPreview.ts](src/lib/paramasaPreview.ts), ku funksioni `groupRowsBySection` mbledh pozicionet sipas seksionit përkatës. Kjo është e rëndësishme, sepse një skedar i madh përbëhet shpesh nga disa seksione të ndryshme: demolim, betonarme, elektrikë, hidraulikë, gdhendje, etj. Pa grupim të saktë, pozicione të ndryshme do të përziheshin, duke çuar në faqe të pasakta dhe dokumentacion të paorganizuar. Grupimi bazohet në informacionin e pozicionit, në titullin e seksionit dhe, kur është e nevojshme, edhe në indeksin e tabelës nga e cila vjen rreshti.
-
-Më pas, sistemi përdor funksionin `planLibriExport` në [src/lib/libriExport.ts](src/lib/libriExport.ts). Ky funksion merr rastin e rreshtave të grupuar dhe vendos se cilat pozicione shkojnë në cila faqe. Logjika nuk është thjesht “të ndajë në faqe të barabarta”, por merr parasysh disa faktorë realë të projektit, si:
-
-- gjatësia e përshkrimit të një pozicioni,
-- numri i rreshtave që hyjnë në një faqe të modelit Excel,
-- njësi të ndryshme brenda të njëjtit seksion,
-- rreziku i mbushjes së faqes ose “overflow” të përshkrimeve,
-- nevojën për të ndarë seksione të mëdha në më shumë se një faqe.
-
-Ky proces është shumë i rëndësishëm për një aplikacion të ndërtimit, sepse dokumentet e Librit Ndërtimor duhet të përputhen me formatin e shablloneve origjinale. Nëse një faqe mbushet gabim, dokumenti në Excel mund të duket i pasaktë, me rreshta jashtë kufijve, ose me një përshkrim që e bën të pamundur printimin e saktë.
-
-Pjesa tjetër e rëndësishme është `previewMeta` dhe metadata për dokumentin final. Në [src/pages/ImportPage.tsx](src/pages/ImportPage.tsx), sistemi krijon një objekt `ParamasaPreviewMeta` me fushat e rëndësishme si:
-
-- `executorName` (përgjegjës / ekzekutues),
-- `month` dhe `date`,
-- `objectName` (objekti / projekti),
-- `offerAccount` (nr. i ofertës),
-- `offerPositions` (lista e pozicioneve),
-- `sectionTitle` (titulli i seksionit / pjesës së dokumentit).
-
-Kjo metadata është e rëndësishme sepse u jep dokumentit të eksportuar një kontekst të plotë. Deri vonë, shumë aplikacione ndërtimore e trajtojnë këtë pjesë si një detaj dytësor, por në praktikë ajo është thelbësore për identitetin dhe korrektësinë e dokumentit final. Në sistemin tonë, metadata mbushet automatikisht nga skedari i importuar, por përdoruesi mund ta modifikojë atë përmes `sectionTitleOverrides` dhe përmes përzgjedhjes së projekti të lidhur.
-
-Në një nivel më të avancuar, sistemi mbështet edhe mënyrën `manual` të grupimit dhe `auto` të grupimit. Në modalitetin automat, faqet planifikohen me logjikë të gjeneruar nga data dhe seksionet; në modalitetin manual, përdoruesi mund të rregullojë përbërjen e faqeve dhe të kontrollojë se si pjesëtohet dokumenti. Kjo duket e thjeshtë për përdoruesin, por nën kapak përfshin një logjikë komplekse: mbajtur në version të qëndrueshëm, dhe në një sistem ku dokumentimi është kritik, kontrolli manual i planit e bën procesin shumë më të besueshëm.
-
-Në fund, përfundimi i gjithë kësaj rrjedhe është eksporti real i dokumentit. Funksionet `buildLibriNdertimorWorkbook` dhe `buildLibriNdertimorZip` e marrin planin final të faqes, e kombinojnë me shabllonet origjinale të Excel-it dhe e prodhojnë një dokument të gatshëm për printim ose shpërndarje. Kjo është pikërisht ajo që e bën projektin më shumë se një UI e thjeshtë: është një platformë që transformon dokumente të papërpunuara në produkte të standardizuara dhe të përdorshme në praktikë.
-
-Kjo logjikë është thelbësore për temën e diplomës, sepse tregon qartë se si një sistem web nuk është vetëm “paraqitje grafike”, por një kombinim i analizës së të dhënave, modelimit logjik, validimit dhe automatizimit të proceseve profesionale.
-
-### 7.5 Si bëhet vlerësimi i ofertës
-
-Vlerësimi i ofertës në këtë sistem ndërtohet nga kostoja e pozicionit dhe nga përqindjet e fitimit dhe TVSH-së. Për çdo pozicion përdoruesi mund të vendosë sasinë, çmimin e materialit, çmimin e punës, ditët e punës, ushqimin, transportin, shpenzimet e tjera, fitimin dhe TVSH-në.
-
-Fillimisht llogariten shpenzimet bazë:
+Rrjedha e zakonshme është:
 
 ```text
-Materiali = sasia × çmimi i materialit
-Puna = sasia × çmimi i punës
-Ushqimi = ditët × çmimi i ushqimit
-Transporti = ditët × çmimi i transportit
-Kostoja bazë = materiali + puna + ushqimi + transporti + shpenzimet e tjera
+Faqja React → service → Supabase (PostgreSQL)
+      ↓
+  src/lib (llogaritje, validim, import/eksport)
 ```
 
-Mbi koston bazë aplikohet fitimi dhe më pas TVSH-ja. Kjo ndarje e bën ofertën të kontrollueshme, sepse përdoruesi mund të shohë jo vetëm totalin, por edhe se cilët komponentë e krijojnë atë total. Formula kryesore është e implementuar në [src/lib/pricing.ts](src/lib/pricing.ts) dhe përdoret gjatë regjistrimit ose editimit të një pozicioni.
+Jo çdo query kalon ende përmes një service-i; disa faqe lexojnë Supabase drejtpërdrejt. Nëse sistemi zgjerohet, kjo mund të centralizohet gradualisht, por s'është kusht për ta kuptuar rrjedhën aktuale.
 
-Ky model e ndihmon përdoruesin të marrë vendime më të informuara. Për shembull, nëse një ofertë del shumë e lartë, mund të analizohet nëse shkaku është materiali, puna, transporti, fitimi ose TVSH-ja. Në këtë mënyrë sistemi nuk shërben vetëm për ruajtjen e një çmimi përfundimtar, por edhe për shpjegimin e mënyrës se si është ndërtuar oferta.
+## 3. Përdorimi sipas faqeve
 
-Përveç vlerësimit fillestar, sistemi ruan edhe historikun e çmimeve. Çdo regjistrim ose editim i pozicionit mund të krijojë një snapshot të ri në tabelën `price_history`. Kjo e mundëson krahasimin e çmimeve me kalimin e kohës dhe ndihmon në vlerësimin e ofertave të ardhshme duke u bazuar në të dhëna historike.
+### Ballina
 
-Duhet të bëhet dallimi ndërmjet tri vlerave:
+Ballina paraqet numrin e projekteve/kategorive/pozicioneve, vlerën e regjistruar, statistika sipas projektit dhe kategorisë, aktivitetin e Librave Ndërtimorë dhe paramasën e fundit. Trendi mujor i ofertave gjendet te faqja “Të dhënat”.
 
-- **Kostoja e planifikuar**: shpenzimet e parashikuara para ose gjatë ofertimit.
-- **Çmimi i ofertës**: vlera që i ofrohet klientit pas aplikimit të fitimit dhe TVSH-së.
-- **Kostoja reale**: shpenzimi final i projektit pasi puna ka përfunduar.
+### Regjistrimi
 
-Ky dallim lejon që sistemi të krahasojë parashikimin me realitetin. Nëse kostoja reale është më e lartë se ajo e planifikuar, sistemi tregon se oferta ka qenë e nënvlerësuar; nëse është më e ulët, projekti ka pasur rezultat më të mirë se parashikimi.
+Përdoruesi:
 
-## 8. Funksionalitetet kryesore
+1. zgjedh projektin dhe kategorinë ose shkruan emra të rinj;
+2. plotëson përshkrimin, njësinë, sasinë dhe kostot;
+3. cakton përqindjet e fitimit dhe TVSH-së;
+4. sheh preview të formulës dhe ruan rreshtin.
 
-### 8.1 Ballina / Dashboard
+[RegisterPage.tsx](./src/pages/RegisterPage.tsx) menaxhon formën. [pricing.ts](./src/lib/pricing.ts) llogarit çmimet. [register.ts](./src/services/register.ts) përgatit parametrat dhe thërret funksionin SQL për ruajtje.
 
-Faqja kryesore paraqet gjendjen e përgjithshme të sistemit me statistika, projekte referencë, grafikë analitike, gjendje sipas statusit dhe përmbledhje të Librave Ndërtimor sipas vlerës, faqeve dhe pozicioneve.
+### Të dhënat
 
-### 8.2 Regjistrimi i pozicioneve
+Përdoruesi hap projekt ose kategori dhe mund të shohë/ndryshojë pozicionet, të krahasojë çmime dhe të shënojë koston reale të projektit. Redaktimi duhet të ngarkojë shpenzimet dhe normat ekzistuese; nuk duhet të sajojë një TVSH/fitim të ri vetëm sepse forma u hap e u ruajt.
 
-Përdoruesi mund të shtojë pozicione të reja me:
+Trendi mujor paraqet vlerën aktuale të ofertave për gjashtë muajt kalendarikë të fundit, të grupuar sipas muajit të krijimit të projektit. Mund të filtrohet sipas statusit dhe përfshin edhe muajt pa aktivitet. Kjo vlerë nuk nënkupton pagesa të pranuara ose fitim; nëse pozicionet e një projekti ndryshojnë më vonë, totali aktual i tij paraqitet te muaji i krijimit të projektit.
 
-- projekt,
-- kategori,
-- përshkrim,
-- njësi,
-- sasi,
-- material,
-- punë,
-- ushqim,
-- transport,
-- fitim,
-- TVSH.
+### Importi dhe Libri Ndërtimor
 
-Sistemi llogarit automatikisht totalin dhe çmimin për njësi.
+Faqja pranon Excel-in, paraqet pozicionet e lexuara, metadata-n dhe një plan të faqeve. Para shkarkimit, përdoruesi mund të ndërhyjë në bashkimin/ndarjen e faqeve; ndarja manuale ruhet me regjistrin e importit dhe përdoret kur libri rishikohet ose shkarkohet përsëri. Eksporti i një workbook-u përdor shabllonet në `public/templates`; eksporti ZIP i mban faqet si skedarë të veçantë.
 
-### 8.3 Importi nga Excel
+### Fatura
 
-Aplikacioni lexon skedarët Excel, i validon të dhënat dhe i shfaq në preview para eksportit.
+Dy lloje dokumentesh: faturë kontrate dhe fletë-dërgesë me rreshta pozicionesh. Vlerat plotësohen manualisht në formë, validohen dhe pastaj vendosen në shabllonin Excel. Përdoruesi prapë duhet të kontrollojë rezultatin kundrejt dokumentit/kontratës origjinale.
 
-### 8.4 Libri Ndërtimor
+### Kërkimi
 
-Sistemi gjeneron faqe të Librit Ndërtimor në format të organizuar, me shabllone dhe ndarje sipas seksioneve.
+Kërkimi global përfshin përshkrimin, numrin e pozicionit, emrin e projektit dhe emrin e kategorisë. Rezultatet e vjetra nuk duhet ta mbishkruajnë rezultatin për kërkesën e fundit kur përdoruesi shtyp shpejt.
 
-### 8.5 Faturat
+## 4. Llogaritja e çmimit, hap pas hapi
 
-Krijohen fatura të strukturuara sipas dy modeleve: kontratë dhe pozicione.
+Kontrata e rëndësishme e sistemit është që **njësitë e kostove të mos ngatërrohen**:
 
-### 8.6 Kërkimi global
+- material dhe punë: çmimi është për njësi pune, shumëzohet me sasinë;
+- ushqim dhe transport: çmimi është për ditë, shumëzohet me ditët;
+- shpenzimet tjera: shuma e plotë për pozicionin, nuk shumëzohet.
 
-Përdoruesi mund të kërkojë nëpër përshkrime, numra pozicionesh dhe projekte.
+Formula në [pricing.ts](./src/lib/pricing.ts):
 
-### 8.7 Menaxhimi i të dhënave
+```text
+M  = sasia × materiali për njësi
+P  = sasia × puna për njësi
+U  = ditët × ushqimi ditor
+T  = ditët × transporti ditor
+S  = shpenzimet tjera (shumë fikse)
+N  = M + P + U + T + S
+F  = N × (përqindja e fitimit / 100)
+B  = N + F                       (baza e TVSH-së)
+TV = B × (përqindja e TVSH-së / 100)
+Totali me TVSH = B + TV
+Çmimi për njësi = Totali me TVSH / sasia
+```
 
-Faqja e të dhënave ofron editim, fshirje, krahasim projektesh, krahasim kategorish dhe historik çmimesh.
+Shembull:
 
-### 8.8 Autentikimi dhe profili
+- sasia = 2;
+- materiali për njësi = €10 → €20;
+- puna për njësi = €5 → €10;
+- ditë = 1, ushqim = €4/ditë, transport = €8/ditë;
+- shpenzime tjera = €3.
 
-Përdoruesi mund të hyjë, të aplikojë për llogari, të ndryshojë password-in dhe të shkarkojë backup JSON. Llogaritë e reja marrin statusin `pending`; vetëm administratori mund t’i aprovojë, refuzojë ose pezullojë. Profili i administratorit përmban statistika dhe menaxhim të aplikimeve.
+Nëntotali është €45. Me fitim 10%, fitimi = €4.50 dhe baza e TVSH-së = €49.50. Me TVSH 18%, TVSH = €8.91 dhe totali = €58.41. Çmimi për njësi = €29.205 (shfaqja/rrumbullakimi bëhet në formatim).
 
-## 9. Të dhënat që përdoren në projekt
+Funksioni përdoret si në preview ashtu edhe në ruajtje/redaktim për të shmangur kopjimin e formulës nëpër faqe.
 
-Sistemi punon me këto entitete kryesore:
+### Pse raporti i fitimit duhet të heqë TVSH-në?
 
-- **Projektet**: emri, klienti, statusi, përshkrimi, kosto reale, shënime.
-- **Kategoritë**: emri dhe përshkrimi.
-- **Pozicionet e projektit**: numri i pozicionit, përshkrimi, njësia, sasia, çmimi, totali.
-- **Shpenzimet e detajuara**: material, punë, ushqim, transport dhe të tjera, të ruajtura veçmas në tabelën `item_expenses`.
-- **Historiku i importeve**: `import_history` është tabelë legacy dhe nuk përdoret aktualisht; historiku aktiv i Librave ruhet në `libri_exports`.
-- **Historiku i çmimeve**: snapshot-e të çmimeve dhe fitimit.
-- **Eksportet e Librit Ndërtimor**: metadata, rreshta dhe statistika të eksportit.
-- **Të dhëna të faturave**: klienti, data, fushat financiare dhe përmbajtja e faturës.
+TVSH-ja e mbledhur për shtetin nuk është fitim i kompanisë. Nëse çmimi total është €118 me TVSH 18%, shitja pa TVSH është €100. Nëse kostoja është €80:
 
-Në repository ekzistojnë edhe skedarë shembull për punë operative, si p.sh. shabllonet e faturave në [Fatura](Fatura) dhe shumë skedarë Excel për paramasa dhe Libër Ndërtimor në [Paramasa](Paramasa).
+```text
+Fitimi = €100 − €80 = €20
+Fitimi ndaj kostos (markup) = €20 / €80 × 100 = 25%
+```
 
-## 10. Përshkrimi i faqeve
+Nëse gabimisht zbritet kostoja nga totali bruto, dalin €38 fitim dhe raporti i mbivlerëson rezultatet me shumën e TVSH-së. Për këtë arsye analiza përdor normën e TVSH-së së ruajtur me pozicionin për ta kthyer totalin bruto në vlerë neto.
 
-### 10.1 Faqja kryesore
+“Fitimi ndaj kostos” (`profit / cost`) është markup, jo marzh i shitjes (`profit / revenue`). Të dyja janë raporte të vlefshme, por nuk janë e njëjta gjë. Në këtë implementim, përqindja është ndaj kostos.
 
-Shërben si panel i gjendjes së projektit, ku shfaqen statistikat dhe hyrjet e shpejta drejt moduleve të tjera.
+## 5. Çfarë ruhet në databazë?
 
-### 10.2 Faqja e regjistrimit
+| Tabela | Çfarë ruan |
+|---|---|
+| `projects` | Emrin e projektit, klientin, statusin, shënimet dhe koston reale nëse plotësohet. |
+| `categories` | Emrat e kategorive të pozicioneve. |
+| `project_items` | Pozicionin, njësinë/sasinë, vlerën bruto, përqindjen e fitimit dhe të TVSH-së. |
+| `item_expenses` | Zërat e kostos së lidhur me pozicionin. |
+| `price_history` | Fotografi historike të vlerave të çmimeve gjatë ruajtjes/redaktimit. |
+| `libri_exports` | Emrin e skedarit të importuar, metadata-n dhe pozicionet e parsuar për rigjenerim. |
+| `profiles` | Të dhënat/rolet e profilit të lidhur me Supabase Auth. |
 
-Përdoret për futjen manuale të të dhënave dhe për kalkulimin e kostove.
+Marrëdhëniet kryesore:
 
-### 10.3 Faqja e faturës
+```text
+projects 1 ─── * project_items * ─── 1 categories
+project_items 1 ─── * item_expenses
+project_items 1 ─── * price_history
+```
 
-Shërben për gjenerimin e faturave sipas modeleve të ndryshme të biznesit.
+Një pozicion lidhet me një projekt, mund të ketë kategori dhe ka shumë rreshta shpenzimesh. Historiku nuk zëvendëson gjendjen aktuale të pozicionit.
 
-Në repository janë të pranishëm edhe shabllonet përkatëse Excel që përdoren si bazë për këtë funksionalitet.
+## 6. Pse ndryshoi ruajtja e databazës?
 
-### 10.4 Faqja e importit
+### Para përmirësimit
 
-Përdoret për import Excel, ndarje të rreshtave, preview dhe eksport final.
+Ruajtja e pozicionit bëhej me hapa të veçantë: krijo projektin, krijo kategorinë, fut pozicionin, pastaj fut shpenzimet. Nëse një hap dështonte në mes, mund të mbetej projekt bosh ose pozicion pa shpenzime.
 
-Kjo faqe lidhet drejtpërdrejt me materialet në folderin [Paramasa](Paramasa), ku ruhen shembuj skedarësh realë nga përdorimi praktik.
+Po ashtu, redaktimi bënte `UPDATE` të pozicionit dhe pastaj dy kërkesa të ndara (fshi shpenzimet e vjetra, fut të rejat). Dështimi pas fshirjes mund t'i linte kostot bosh.
 
-### 10.5 Faqja e të dhënave
+### Pas përmirësimit
 
-Përmban administrim të të dhënave, analizë dhe krahasim.
+[Migrimi SQL](./supabase/migrations/20261013173000_preserve_pricing_and_atomic_saves.sql) shton:
 
-### 10.6 Faqja e kërkimit
+- kolonat `profit_percent` dhe `vat_percent` në `project_items`;
+- backfill të normave të njohura nga historiku; për të dhënat e vjetra pa normë, vlerësim duke supozuar TVSH 18% dhe duke ruajtur totalin;
+- funksionin `save_register_position`, i cili krijon projekt/kategori kur duhen dhe ruan pozicionin me shpenzimet në një transaksion;
+- funksionin `update_project_position`, i cili përditëson pozicionin dhe zëvendëson shpenzimet brenda një transaksioni.
 
-Lejon kërkim të shpejtë në të gjitha pozicionet dhe projektet.
+Në PostgreSQL çdo thirrje RPC është transaksion: nëse insert/update i njërit prej rreshtave dështon, operacioni kthehet mbrapsht. Funksionet janë `SECURITY INVOKER`, pra nuk i anashkalojnë lejet/RLS të thirrësit; kjo sjellje duhet verifikuar me rolet reale.
 
-### 10.7 Faqja e profilit
+### Hapat para përdorimit të versionit të ri
 
-Për menaxhimin e llogarisë, ndryshimin e password-it, backup-it, daljes nga sesioni dhe administrimit të përdoruesve. Paneli shfaq statusin e llogarisë, rolin, kohën e hyrjes së fundit dhe timeout-in e sesionit.
+1. Kontrollo që Supabase-i i projektit përmban tabelat `projects`, `categories`, `project_items`, `item_expenses` dhe `price_history`.
+2. Apliko `supabase/migrations/20261013173000_preserve_pricing_and_atomic_saves.sql` në databazën e synuar (me Supabase CLI ose SQL Editor sipas procesit që përdor).
+3. Konfirmo që migrimi përfundoi pa gabime.
+4. Testo krijimin dhe redaktimin e një projekti/pozicioni me përdorues të autentikuar.
+5. Provo me role që nuk duhet të kenë leje dhe sigurohu që RLS i refuzon veprimet.
 
-Përveç ndryshimit të password-it, funksioni i backup-it JSON ruan `projects`, `categories`, `project_items` dhe `item_expenses`, sipas implementimit real të shërbimit të eksportit.
+Këtu nuk ka mjedis të lidhur me databazën e gjallë. Build-i lokal nuk ekzekuton migrimin, prandaj kjo pjesë duhet bërë e testuar nga ti në Supabase para publikimit. Mos i dërgo askujt çelësat privatë të projektit.
 
-## 11. Funksionet kryesore teknike
+## 7. Si funksionon importi Excel?
 
-- `calculatePositionPrice` për llogaritje çmimi.
-- `validateKontrate` dhe `validatePozicione` për faturat.
-- `parseExcelWithValidation` për lexim dhe kontroll të Excel-it.
-- `planLibriExport` për ndarje të faqeve të Librit Ndërtimor.
-- `buildLibriNdertimorWorkbook` për eksport final.
-- `searchPositions` për kërkim global.
-- `fetchDashboardStats` dhe `fetchProjectSummaries` për analiza.
-- `signIn`, `signUp`, `resetPassword`, `changePassword` për auth.
+Pika hyrëse është [excel.ts](./src/lib/excel.ts):
 
-### 11.1 Funksione të lidhura me eksportin dhe administrimin
+1. Skedari lexohet në shfletues përmes `FileReader`.
+2. Për secilën fletë kontrollohet nëse i përket formatit “Libri Ndërtimor”.
+3. Nëse po, [libriNdertimor.ts](./src/lib/libriNdertimor.ts) nxjerr metadata, përshkrime, matje dhe sasi.
+4. Përndryshe provohet formatimi strukturor/tabelor, pastaj parseri legacy si fallback.
+5. Rreshtat dublikatë eliminohen dhe, nëse gjehet rresht “TOTALI”, shuma e deklaruar krahasohet me shumën e llogaritur.
 
-- `exportProjectCSV` për eksport CSV të një projekti.
-- `exportAllDataJson` për backup JSON të të dhënave.
-- `recordPriceSnapshot` për ruajtje të historikut të çmimeve.
-- `fetchProfitSummaryByProject` për analizë të fitimit sipas projektit.
-- `fetchPriceTrend` për trendin e çmimeve.
+Kontrolli i totalit nuk provon se çdo rresht i lexuar është semantikisht i saktë; është sinjal për të dalluar dokumentet ku mund të ketë pozicione të humbura ose të lexuara gabim. Përdoruesi duhet të kontrollojë preview-n.
 
-## 12. Dizajni i ndërfaqes së përdoruesit
+## 8. Si planifikohen faqet e Librit Ndërtimor?
 
-Ndërfaqja është ndërtuar me fokus në qartësi dhe përdorim praktik. Është përdorur një layout me sidebar, kartela, tabela dhe preview vizual për të shmangur ngarkesën e panevojshme në përdorim.
+[paramasaPreview.ts](./src/lib/paramasaPreview.ts) i grupon pozicionet sipas seksionit. [libriPaging.ts](./src/lib/libriPaging.ts) vlerëson nëse përshkrimet përshtaten në slote të shablloneve me 1–5 pozicione. Preferon një faqe me më shumë pozicione vetëm nëse tekstet përshtaten; në rast tjetër ndan faqet dhe sinjalizon overflow kur edhe një pozicion nuk përshtatet.
 
-Qëllimi i UI-së nuk është vetëm pamja, por edhe:
+[libriPlanEditor.ts](./src/lib/libriPlanEditor.ts) zbaton veprimet manuale:
 
-- shpejtësia e punës,
-- orientimi i qartë i përdoruesit,
-- minimizimi i gabimeve,
-- akses i lehtë në funksionet kryesore.
+- bashkim i dy faqeve fqinje, me kapacitet maksimal pesë pozicione;
+- ndarje pas një pozicioni;
+- lëvizje të pozicionit në faqe tjetër nëse përshtatet.
 
-## 13. Testimi dhe vlerësimi
+Përshkrimi në fushën e metadata-s mund të ndryshohet; preview dhe eksporti duhet të përdorin të njëjtin plan për të shmangur dokumente që nuk përputhen me pamjen paraprake.
 
-Testimi i projektit duhet të fokusohet në këto raste:
+## 9. Backup-i: çfarë përfshin dhe çfarë jo?
 
-- saktësia e llogaritjeve financiare,
-- importi korrekt i Excel-it,
-- gjenerimi i saktë i Librit Ndërtimor,
-- funksionimi i kërkimit global,
-- ruajtja dhe editimi i të dhënave,
-- autentikimi dhe mbrojtja e faqeve,
-- eksporti i backup-it.
+Shkarkimi JSON tani lexon faqet me intervale 1,000 rreshtash për secilën tabelë operative dhe e ndërpret eksportin nëse ndonjë kërkesë dështon. Ai përfshin:
 
-Vlerësimi praktik tregon nëse aplikacioni përmirëson kohën e punës dhe ul gabimet krahasuar me procesin manual.
+- projekte, kategori, pozicione dhe shpenzime;
+- historikun e çmimeve;
+- regjistrat e importit të Librit Ndërtimor.
 
-### 13.1 Çfarë duhet të kuptojë autori për mbrojtjen e temës
+Ai **nuk** përfshin profilet/auth të përdoruesve dhe nuk ka buton për rikthim automatik të JSON-it në databazë. Pra është eksport i të dhënave të punës, jo kopje e plotë e infrastrukturës/databazës. Ruaje skedarin në lokacion të sigurt sepse mund të përmbajë të dhëna biznesi.
 
-Gjatë prezantimit nuk është e nevojshme të shpjegohet çdo rresht i kodit. Më e rëndësishme është të kuptohet rrjedha dhe arsyeja e vendimeve teknike. Autori duhet të jetë në gjendje të shpjegojë këto pika:
+## 10. Siguria dhe kufijtë që duhen kuptuar
 
-1. **Problemi**: të dhënat dhe ofertat menaxhoheshin në Excel dhe dokumente të ndara, prandaj kishte përsëritje, gabime dhe vështirësi në kërkim.
-2. **Zgjidhja**: sistemi centralizon projektet, kategoritë, pozicionet, shpenzimet dhe dokumentet në një aplikacion të vetëm.
-3. **Rrjedha e të dhënave**: përdoruesi fut të dhëna ose ngarkon Excel; sistemi i validon, i transformon, i ruan dhe i shfaq në preview, statistika ose eksport.
-4. **Llogaritja**: pozicioni ndërtohet nga sasia dhe komponentët e kostos; pastaj aplikohen fitimi dhe TVSH-ja për të krijuar çmimin e ofertës.
-5. **Databaza**: `projects` ruan projektet, `categories` klasifikon pozicionet, `project_items` ruan pozicionet, ndërsa `item_expenses` ruan koston e detajuar.
-6. **Siguria**: autentikimi kontrollon hyrjen e përdoruesit, ndërsa RLS kufizon përdorimin e tabelave për përdorues të autentikuar.
-7. **Validimi**: sistemi kontrollon fushat e detyrueshme, formatin e Excel-it, totalet dhe rastet ku të dhënat janë të paplota.
-8. **Vlera praktike**: përdoruesi kursen kohë, ka më pak llogaritje manuale dhe mund të krahasojë ofertën e parashikuar me rezultatin real.
+- Supabase Auth menaxhon identitetin; profili i aplikacionit ka role/status aprovimi.
+- Rruga e mbrojtur në frontend nuk është vetë kufi sigurie. RLS në databazë është kontrolli vendimtar për rreshtat.
+- Konfigurimi real RLS nuk mund të konfirmohet vetëm duke lexuar UI-në. Kontrolloje në Supabase.
+- Aplikacioni mund të kalojë në mënyrë demo kur Supabase nuk është konfiguruar; kjo nuk duhet ngatërruar me autentikim prodhimi.
+- Raportet që mbledhin shumë rreshta duhet të marrin parasysh kufirin e rezultateve të API-së. Për databaza të mëdha, bëj agregim SQL ose faqëzim të plotë.
+- Kostoja reale e projektit është vlerë që përdoruesi e plotëson, jo rezultat i integrimit me faturat reale.
+- Parseri mbështet formatet e njohura; para importit të një formati të ri kontrollo preview-n dhe totalet.
 
-Një përgjigje e mirë gjatë mbrojtjes duhet të shpjegojë jo vetëm “çfarë teknologjie është përdorur”, por edhe “pse është përdorur”. Për shembull, TypeScript është përdorur për të ulur gabimet në strukturën e të dhënave, Supabase për ruajtje dhe autentikim, ndërsa `xlsx` dhe `exceljs` për leximin dhe krijimin e dokumenteve Excel.
+## 11. Si verifikohen ndryshimet?
 
-Është gjithashtu e rëndësishme të përmenden kufizimet. Qyteti i transportit duhet të ruhet që në momentin e regjistrimit, të dhënat e Excel-it duhet të kenë strukturë të kuptueshme dhe llogaritja e fitimit real kërkon që kostoja reale të plotësohet pas përfundimit të projektit. Pranimi i këtyre kufizimeve e bën vlerësimin akademik më të besueshëm dhe tregon se sistemi është analizuar në mënyrë kritike.
+Komandat:
 
-## 14. Përparësitë e projektit
+```powershell
+npm run build
+npm exec -- vitest run
+```
 
-- Centralizon të gjitha të dhënat në një sistem të vetëm.
-- Automatizon llogaritjet dhe eksportet.
-- Ofron kërkim, analizë dhe histori të të dhënave.
-- Ka arkitekturë të ndarë dhe të lexueshme.
-- Është i përshtatshëm për përdorim real në biznes ndërtimor.
+Pas rregullimeve të tanishme:
 
-## 15. Kufizimet dhe mundësitë e zhvillimit të mëtejshëm
+- `npm run build` — kaloi;
+- `npm exec -- vitest run` — kaluan 11 teste në 4 skedarë;
+- testet mbulojnë llogaritjen dhe konvertimin nga bruto në neto, datat, kategoritë, trendin mujor, ndarjen e seksioneve, planifikimin e faqeve dhe ndërtimin e workbook-ut nga skedari i vërtetë i shabllonit.
 
-Kufizimet aktuale përfshijnë varësinë nga konfigurimi i Supabase dhe faktin që disa rrjedha biznesi kërkojnë të dhëna të sakta në Excel ose databazë. Si zhvillim i mëtejshëm, projekti mund të zgjerohet me:
+Këto janë teste lokale të logjikës. Nuk testojnë transaksionet në një databazë reale, RLS, autentikim të vendosur, UI në shfletues ose përputhjen juridike/kontabël të faturave.
 
-- raportim më të avancuar PDF,
-- role të ndryshme përdoruesish,
-- statistikë më të thelluar,
-- njoftime automatike,
-- integrim me module financiare,
-- eksport më të pasur për dokumentacion zyrtar.
+## 12. Çfarë është rregulluar në kod në këtë iterim?
 
-## 15.1 Përditësimet e implementuara deri më 12.10.2026
+1. Normat e fitimit dhe TVSH-së ruhen te pozicioni dhe ngarkohen prapë gjatë redaktimit.
+2. Fitimi në raport llogaritet kundrejt ofertës pa TVSH, jo totalit bruto.
+3. Ruajtja fillestare dhe përditësimi i pozicionit/shpenzimeve janë RPC transaksionale (pas aplikimit të migrimit).
+4. Ndërrimi i kapacitetit të shabllonit në ndërtuesin manual nuk i fshin më rreshtat e plotësuar; eksporti i ndan sipas kapacitetit.
+5. Backup-i i raporton gabimet, lexon me faqe dhe përfshin historikun e çmimeve/regjistrat e Librit.
+6. Kërkimi përfshin kategoritë dhe kërkesat e vjetra nuk i mbishkruajnë rezultatet më të reja.
+7. Testi i workbook-ut ngarkon shabllonin lokal për Node, kështu shmanget përdorimi i URL-së relative të shfletuesit në Vitest.
+8. Trendi mujor te faqja “Të dhënat” paraqet vlerën e ofertave sipas muajit të krijimit të projektit, me filtër statusi dhe periudhë gjashtëmujore.
 
-Pas versionit fillestar, sistemi është zgjeruar me këto funksione dhe përmirësime:
+## 13. Fjalor i shkurtër
 
-- **Libri Ndërtimor**: dashboard me numrin e librave, vlerën totale, vlerën mesatare, librin me vlerë më të madhe dhe listën Top 5 sipas vlerës.
-- **Metrikat e librave**: çdo libër shfaq faqet, pozicionet dhe vlerën totale; historiku i ruajtur përdor pagination me pesë libra për faqe.
-- **Cache në memory**: kategoritë cache-ohen për pesë minuta dhe eksportet e Librave për dy minuta; cache invalidizohet pas ruajtjes ose fshirjes.
-- **Autentikim me aprovim**: regjistrimi krijon profil `pending`; administratori mund ta aprovojë, refuzojë ose pezullojë përdoruesin.
-- **Panel administrimi**: profili i adminit shfaq numrin total të profileve, aplikimet në pritje, të aprovuarit dhe të refuzuarit, së bashku me datën dhe orën e aplikimit.
-- **Njoftim njëherësh në aplikacion**: pas aprovimit shfaqet vetëm një herë mesazhi i suksesit, i ruajtur me `approval_notice_seen_at` në databazë; nuk përdoren email-e të dyta për approve/reject.
-- **Kufizim login-i**: pas pesë tentativave të pasuksesshme brenda ditës, login-i bllokohet për atë email në browser; Supabase mbetet autoriteti server-side për rate limiting.
-- **Sesioni**: pas 60 minutash pa aktivitet bëhet sign-out automatik; token refresh-i i Supabase nuk rinis më verifikimin e profilit pas Alt+Tab.
-- **UX dhe responsive**: loading screen premium me logo, glassmorphism, ring animimi dhe progress shimmer; është shtuar edhe faqe 404, About Us si route e veçantë, PWA manifest dhe logo reale.
-- **Profil dhe navigim**: logout-i është bërë veprim kryesor, theme/logout janë vendosur në një rresht në sidebar, ndërsa profili ka përmbledhje të statusit, rolit dhe timeout-it.
+- **Pozicion:** rresht pune/ofertimi, p.sh. një lloj punimi me përshkrim, njësi, sasi dhe çmime.
+- **Paramasë:** listë pozicionesh dhe sasish të parashikuara për punë.
+- **Libër Ndërtimor:** dokument me pozicione dhe matje që përdoren për evidentim të punëve.
+- **Nëntotali:** shuma e komponentëve të kostos para fitimit dhe TVSH-së.
+- **TVSH:** tatim mbi vlerën e shtuar; nuk është fitim i kompanisë.
+- **Markup (fitimi ndaj kostos):** fitimi pjesëtuar me koston.
+- **RPC:** thirrje e funksionit të databazës nga klienti; funksioni i ruajtjes ekzekutohet si transaksion.
+- **RLS:** rregulla të PostgreSQL/Supabase që kufizojnë cilat rreshta mund të lexojë/ndryshojë një përdorues.
+- **Migration:** skedar versionimi për ndryshim të skemës ose funksioneve të databazës.
 
-## 15.2 Vlerësimi i sigurisë dhe kufizimet
+## 14. Çfarë duhet sqaruar me mentorin?
 
-Siguria aktuale vlerësohet si **e mirë për përdorim të kontrolluar familjar/biznesor, por jo ende si siguri e plotë enterprise**. Pikat kryesore janë:
+- Cili format dhe cilat udhëzime citimi kërkohen për punimin formal?
+- A dëshiron mentori një studim të përdorshmërisë me përdorues realë si pjesë të rezultateve?
+- Cilat shabllone dhe raste reale mund të përfshihen në testim pa publikuar të dhëna konfidenciale?
+- Si duhet të paraqitet kontributi: më shumë si sistem i ofertimit, si menaxhim i dokumenteve, apo si të dyja?
+- A duhet të përfshihet migrimi SQL dhe modeli i databazës si figura/tabela në kapitullin e projektimit?
 
-- Supabase Auth menaxhon password-et dhe session-in; password-et nuk ruhen në databazën e aplikacionit.
-- RLS është aktivizuar për tabelat kryesore dhe politikat e reja lejojnë përdorim vetëm për profile me `status = approved`.
-- Funksionet me `SECURITY DEFINER` për admin/profile janë të kufizuara dhe funksionet e brendshme janë zhvendosur në schema `private`.
-- Profilet `pending`, `rejected` dhe `suspended` nuk lejohen të hyjnë në aplikacion.
-- Rate limit-i me pesë tentativa në ditë është mbrojtje UX në `localStorage`, prandaj mund të anashkalohet duke fshirë storage-in ose nga një pajisje tjetër; për mbrojtje të fortë duhet rate limiting server-side/Edge Function.
-- Politikat aktuale u japin përdoruesve të aprovuar qasje të plotë në të dhënat operative. Roli `viewer` ekziston në model, por ende nuk ka politika të ndara për read-only; kjo është një përmirësim i ardhshëm.
-- Backup JSON mund të përmbajë të dhëna të ndjeshme të projekteve dhe duhet të ruhet vetëm në pajisje të besueshme.
-- Mungojnë ende MFA/2FA, audit log i plotë dhe testim automatik end-to-end. Këto janë rreziqe të mbetura, jo funksione të pretenduara si të përfunduara.
-
-Për prodhim më të gjerë rekomandohet: role të ndara me RLS për `viewer`, rate limiting server-side, audit log, MFA, backup i enkriptuar dhe monitorim i gabimeve. Këto kufizime duhet të deklarohen gjatë mbrojtjes së diplomës për të treguar vlerësim kritik të sistemit.
-
-## 16. Përfundim
-
-Ky projekt paraqet një zgjidhje praktike dhe të strukturuar për menaxhimin e proceseve të lidhura me paramasa, oferta, fatura dhe dokumentacion ndërtimor. Përdorimi i teknologjive moderne web e bën sistemin të shpejtë, të qartë dhe të përshtatshëm për zgjerim të mëtejshëm.
-
-Nga këndvështrimi akademik, tema është e vlefshme sepse përfshin analizë problemi, projektim software-i, implementim teknik, testim dhe vlerësim praktik. Për këtë arsye, projekti është i përshtatshëm për një temë diplome në Inxhinieri Softuerike ose Shkenca Kompjuterike.
-
-## 17. Rekomandimi për gjatësinë e dokumentit
-
-Për këtë projekt, unë rekomandoj **15 deri në 20 faqe** për versionin përfundimtar nëse është temë diplome bachelor dhe nëse dokumenti përfshin:
-
-- hyrje,
-- metodologji,
-- teknologji,
-- arkitekturë,
-- funksione,
-- screenshot-e,
-- testim dhe përfundim.
-
-Nëse profesori kërkon më shumë detajim ose nëse shtohen shumë screenshot-e, atëherë dokumenti mund të shkojë edhe në **20–25 faqe**. Për një version të mirë balancuar, **18 faqe** është një pikë shumë e mirë.
-
-## 18. Burimet reale nga repository
-
-Për ta bërë dokumentin sa më të saktë me implementimin, janë marrë parasysh këto burime konkrete nga repository:
-
-- [App.tsx](App.tsx) për route-t dhe provider-at globalë.
-- [README.md](README.md) për përshkrimin bazë të projektit.
-- [supabase/user-approval.sql](supabase/user-approval.sql) për profilet, approval workflow dhe RLS.
-- [src/pages/HomePage.tsx](src/pages/HomePage.tsx), [src/pages/RegisterPage.tsx](src/pages/RegisterPage.tsx), [src/pages/ImportPage.tsx](src/pages/ImportPage.tsx), [src/pages/DataPage.tsx](src/pages/DataPage.tsx), [src/pages/SearchPage.tsx](src/pages/SearchPage.tsx), [src/pages/ProfilePage.tsx](src/pages/ProfilePage.tsx), [src/pages/LoginPage.tsx](src/pages/LoginPage.tsx) për funksionalitetet e faqeve.
-- [src/services](src/services) për logjikën e biznesit, eksportet dhe analizat.
-- [src/lib](src/lib) për validimin, llogaritjen dhe eksportin e dokumenteve.
-- [Fatura](Fatura) dhe [Paramasa](Paramasa) për materialet shembull dhe shabllonet praktike.
-
-Kjo do të thotë që dokumenti nuk është shkruar vetëm “nga mendja”, por është përshtatur me strukturën, funksionet dhe asetet reale që ekzistojnë në repository.
-
-## 19. Referenca
-
-1. React Documentation: https://react.dev
-2. TypeScript Documentation: https://www.typescriptlang.org/docs/
-3. Vite Documentation: https://vite.dev
-4. React Router Documentation: https://reactrouter.com
-5. Supabase Documentation: https://supabase.com/docs
-6. react-hook-form Documentation: https://react-hook-form.com
-7. ExcelJS Documentation: https://github.com/exceljs/exceljs
-8. xlsx / SheetJS Documentation: https://docs.sheetjs.com
-9. Victory Documentation: https://commerce.nearform.com/open-source/victory/
-10. date-fns Documentation: https://date-fns.org
-
-## Shtojca
-
-Nëse ky dokument dorëzohet si temë diplome, sugjerohet që në versionin final të shtohen edhe:
-
-- faqja e titullit,
-- përmbajtja automatike,
-- figura / screenshot-e nga aplikacioni,
-- diagrami i arkitekturës,
-- diagrami i databazës,
-- shembuj të importit dhe eksportit,
-- testime me të dhëna reale.
+Mos i shpik përgjigjet në punim. Shëno vendimet pasi t'i konfirmosh me mentorin dhe me përdoruesit e synuar.

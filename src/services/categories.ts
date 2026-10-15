@@ -6,6 +6,29 @@ import type { DbCategory } from '../types/database';
 const CATEGORIES_CACHE_KEY = 'categories';
 const CATEGORIES_CACHE_TTL_MS = 5 * 60 * 1000;
 
+export function categoryNameKey(name: string): string {
+  const normalized = name.trim().toLocaleLowerCase('sq');
+  return normalized === 'metalik & weld' ? 'metalik & saldim' : normalized;
+}
+
+export function categoryDisplayName(name: string): string {
+  return name.trim().toLocaleLowerCase('sq') === 'metalik & weld' ? 'Metalik & Saldim' : name;
+}
+
+export function uniqueCategories(categories: DbCategory[]): DbCategory[] {
+  const unique = new Map<string, DbCategory>();
+  for (const category of categories) {
+    const key = categoryNameKey(category.name);
+    const current = unique.get(key);
+    const normalizedName = category.name.trim().toLocaleLowerCase('sq');
+    const displayCategory = normalizedName === 'metalik & weld'
+      ? { ...category, name: categoryDisplayName(category.name) }
+      : category;
+    if (!current || normalizedName === key) unique.set(key, displayCategory);
+  }
+  return Array.from(unique.values()).sort((a, b) => a.name.localeCompare(b.name, 'sq'));
+}
+
 /** Shton kategoritë standarde nëse nuk ekzistojnë (krahasim pa dallim të madhës së shkronjës). */
 export async function ensureDefaultCategories(): Promise<DbCategory[]> {
   if (!supabase) return [];
@@ -14,20 +37,24 @@ export async function ensureDefaultCategories(): Promise<DbCategory[]> {
   return getCached(
     CATEGORIES_CACHE_KEY,
     async () => {
-      const { data: existing } = await client.from('categories').select('*');
-      const list = existing || [];
+      const { data: existing, error: fetchError } = await client.from('categories').select('*');
+      if (fetchError) throw new Error(`Kategoritë nuk u ngarkuan: ${fetchError.message}`);
+      if (!existing) throw new Error('Databaza nuk ktheu të dhëna për kategoritë.');
+      const list = existing;
 
-      const normalize = (s: string) => s.trim().toLowerCase();
+      const normalize = categoryNameKey;
 
       for (const cat of DEFAULT_CATEGORIES) {
         const found = list.some((c) => normalize(c.name) === normalize(cat.name));
         if (!found) {
-          const { data: inserted } = await client
+          const { data: inserted, error: insertError } = await client
             .from('categories')
             .insert([{ name: cat.name, description: cat.description }])
             .select()
             .single();
-          if (inserted) list.push(inserted);
+          if (insertError) throw new Error(`Kategoria "${cat.name}" nuk u krijua: ${insertError.message}`);
+          if (!inserted) throw new Error(`Databaza nuk e ktheu kategorinë "${cat.name}" pas krijimit.`);
+          list.push(inserted);
         }
       }
 

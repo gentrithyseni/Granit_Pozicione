@@ -111,9 +111,47 @@ function extractPositionNumber(text: string): string {
   return match ? match[1] : '';
 }
 
-function parseNumeric(value: unknown): number {
-  if (typeof value === 'number') return value;
-  const parsed = Number(String(value ?? '').replace(',', '.'));
+export function parseNumeric(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+  let normalized = String(value ?? '')
+    .replace(/[\s\u00a0\u202f]/g, '')
+    .replace(/[€$£]/g, '');
+  if (!normalized) return 0;
+  if (/^[+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(normalized)) {
+    const plainNumber = Number(normalized);
+    return Number.isFinite(plainNumber) ? plainNumber : 0;
+  }
+
+  if (!/^[+-]?\d[\d.,]*$/.test(normalized)) return 0;
+  const lastComma = normalized.lastIndexOf(',');
+  const lastDot = normalized.lastIndexOf('.');
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimalSeparator = lastComma > lastDot ? ',' : '.';
+    const groupingSeparator = decimalSeparator === ',' ? '.' : ',';
+    normalized = normalized.split(groupingSeparator).join('');
+    const decimalIndex = normalized.lastIndexOf(decimalSeparator);
+    normalized = `${normalized.slice(0, decimalIndex).split(decimalSeparator).join('')}.${normalized.slice(decimalIndex + 1)}`;
+  } else {
+    const separator = lastComma >= 0 ? ',' : lastDot >= 0 ? '.' : null;
+    if (separator) {
+      const segments = normalized.split(separator);
+      if (segments.length > 2) {
+        const isThousandsGrouped = segments.slice(1).every((segment) => segment.length === 3);
+        if (isThousandsGrouped) {
+          normalized = segments.join('');
+        } else {
+          const decimal = segments.pop() || '';
+          normalized = `${segments.join('')}.${decimal}`;
+        }
+      } else {
+        normalized = normalized.replace(separator, '.');
+      }
+    }
+  }
+
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -318,29 +356,6 @@ function libriPositionsToRows(sheetName: string, meta: LibriMeta, positions: Ret
   }));
 }
 
-function dedupeRows(rows: ParsedRow[]): ParsedRow[] {
-  const seen = new Set<string>();
-  const result: ParsedRow[] = [];
-
-  rows.forEach((row) => {
-    // çelës identiteti: pozicion + përshkrim + sasi + çmim njësi. Nëse KATËR këto përputhen
-    // saktësisht me një rresht të parë, është praktikisht i sigurt që është dublikatë (nga një
-    // fletë tjetër/rezervë e të njëjtit skedar), jo dy pozicione të ndryshme rastësisht identike.
-    const key = [
-      normalizeString(row.position_number),
-      normalizeString(row.description),
-      Number(row.quantity || 0).toFixed(2),
-      Number(row.unit_price || 0).toFixed(2),
-    ].join('|');
-
-    if (seen.has(key)) return;
-    seen.add(key);
-    result.push(row);
-  });
-
-  return result;
-}
-
 /** Gjen rreshtin "TOTALI :" (nëse ekziston) dhe kthen shumën që vetë skedari e pretendon si
  * total i përgjithshëm — përdoret si kontroll sigurie: krahasohet me shumën që llogarit vetë
  * sistemi, dhe nëse s'përputhen, do të thotë diçka u la jashtë gjatë parsimit (siç ndodhi më
@@ -365,7 +380,7 @@ function detectDeclaredTotal(rows: unknown[][]): number | null {
   return null;
 }
 
-function parseWorkbook(workbook: XLSX.WorkBook): { rows: ParsedRow[]; declaredTotal: number | null } {
+export function parseExcelWorkbook(workbook: XLSX.WorkBook): ParseExcelResult {
   const rows: ParsedRow[] = [];
   let declaredTotal: number | null = null;
 
@@ -392,7 +407,7 @@ function parseWorkbook(workbook: XLSX.WorkBook): { rows: ParsedRow[]; declaredTo
     rows.push(...parseLegacyRows(jsonData, sheetName).map((row) => ({ ...row, source: 'paramasa' as const })));
   });
 
-  return { rows: dedupeRows(rows), declaredTotal };
+  return { rows, declaredTotal };
 }
 
 export type ParseExcelResult = {
@@ -410,7 +425,7 @@ export async function parseExcelWithValidation(file: File): Promise<ParseExcelRe
       try {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'array' });
-        resolve(parseWorkbook(workbook));
+        resolve(parseExcelWorkbook(workbook));
       } catch (error) {
         reject(error);
       }

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Layers, LayoutGrid, X } from 'lucide-react';
 import type { ParsedRow } from '../lib/excel';
 import { groupRowsBySection } from '../lib/paramasaPreview';
@@ -60,6 +61,22 @@ export function ParamasaPreview({
   const [splitTarget, setSplitTarget] = useState<number | null>(null);
   const comparisonLabel = isManual ? `Auto: ${autoPlan.length} faqe → tani: ${plan.length} faqe` : null;
   const [moveTarget, setMoveTarget] = useState<{ pageIndex: number; rowIndex: number } | null>(null);
+
+  useEffect(() => {
+    if (expandedPage === null) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExpandedPage(null);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [expandedPage]);
 
   const applyPlanChange = (result: LibriExportPlanPage[] | { error: string }) => {
     if ('error' in result) {
@@ -338,12 +355,18 @@ export function ParamasaPreview({
                 </button>
               </div>
 
-              {expandedPage === pageIndex && (
-                <div className="edit-modal-backdrop" onClick={() => setExpandedPage(null)}>
-                  <div className="edit-modal-shell libri-popup-shell libri-a4-modal-shell" onClick={(e) => e.stopPropagation()}>
+              {expandedPage === pageIndex && createPortal(
+                <div className="edit-modal-backdrop libri-a4-modal-backdrop" onClick={() => setExpandedPage(null)}>
+                  <div
+                    className="edit-modal-shell libri-popup-shell libri-a4-modal-shell"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="libri-a4-modal-title"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="edit-modal-head">
                       <div>
-                        <h3>Mini-print A4</h3>
+                        <h3 id="libri-a4-modal-title">Mini-print A4</h3>
                         <p className="muted field-hint">Pamja e faqes para shkarkimit — e ngjashme me print preview të Excel-it.</p>
                       </div>
                       <button type="button" className="card import-cancel-btn" onClick={() => setExpandedPage(null)} aria-label="Mbyll">
@@ -461,7 +484,8 @@ export function ParamasaPreview({
                       </div>
                     </div>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
 
               <div className="paramasa-page-meta-grid">

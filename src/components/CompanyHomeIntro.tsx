@@ -32,7 +32,7 @@ const partners = [
 
 export function CompanyHomeIntro() {
   return (
-    <section className="company-home-intro" aria-label="Rreth GRANITI SH.P.K.">
+    <section className="company-home-intro" aria-label="Rreth Megrant ING SH.P.K.">
       <div className="company-hero-panel">
         <div className="company-hero-glow company-hero-glow-one" aria-hidden="true" />
         <div className="company-hero-glow company-hero-glow-two" aria-hidden="true" />

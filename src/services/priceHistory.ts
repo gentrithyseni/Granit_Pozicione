@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { DbPriceHistory } from '../types/database';
+import { netAmountFromGross } from '../lib/pricing';
 
 export type PriceHistorySnapshot = {
   project_item_id?: string | null;
@@ -15,16 +16,16 @@ export type PriceHistorySnapshot = {
   profit_percent: number;
 };
 
-/** Regjistron një "foto" të re të çmimit — THIRRET PËRVEÇ ruajtjes normale (project_items/item_expenses),
- * kurrë s'e zëvendëson një rekord ekzistues. Nëse tabela s'ekziston ende (migrimi s'është ekzekutuar),
- * dështon në heshtje për të mos e prishur rrjedhën kryesore të ruajtjes. */
-export async function recordPriceSnapshot(snapshot: PriceHistorySnapshot): Promise<void> {
-  if (!supabase) return;
+/** Regjistron një foto çmimi pa e zëvendësuar historikun ekzistues; gabimin e kthen që UI ta njoftojë përdoruesin. */
+export async function recordPriceSnapshot(snapshot: PriceHistorySnapshot): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase nuk është i lidhur.' };
   try {
-    await supabase.from('price_history').insert([snapshot]);
-  } catch {
-    // tabela price_history mund të mos ekzistojë ende (migrimi i pa ekzekutuar) — s'duam
-    // që kjo ta ndalojë ruajtjen kryesore të pozicionit.
+    const { error } = await supabase.from('price_history').insert([snapshot]);
+    return { error: error?.message ?? null };
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : 'Ndodhi një gabim i panjohur gjatë ruajtjes së historikut të çmimeve.',
+    };
   }
 }
 
@@ -37,12 +38,17 @@ export type PriceTrendPoint = {
 };
 
 /** Historiku i çmimeve për një kategori (ose të gjitha, nëse categoryId s'jepet), renditur kronologjikisht. */
-export async function fetchPriceTrend(categoryId?: string): Promise<PriceTrendPoint[]> {
+export async function fetchPriceTrend(categoryIds?: string | string[]): Promise<PriceTrendPoint[]> {
   if (!supabase) return [];
   let query = supabase.from('price_history').select('*').order('recorded_at', { ascending: true });
-  if (categoryId) query = query.eq('category_id', categoryId);
+  if (Array.isArray(categoryIds)) {
+    if (categoryIds.length === 0) return [];
+    query = query.in('category_id', categoryIds);
+  }
+  else if (typeof categoryIds === 'string' && categoryIds) query = query.eq('category_id', categoryIds);
   const { data, error } = await query;
-  if (error || !data) return [];
+  if (error) throw new Error(`Historiku i çmimeve nuk u ngarkua: ${error.message}`);
+  if (!data) return [];
   return (data as DbPriceHistory[]).map((row) => ({
     recordedAt: row.recorded_at,
     unitPrice: Number(row.unit_price) || 0,
@@ -67,12 +73,17 @@ export type ProfitSummary = {
   estimateErrorPercent: number | null;
 };
 
-/** Përmbledhje fitimi (i planifikuar, jo real-pas-përfundimit) sipas projektit — nga
- * item_expenses (kosto) kundrejt project_items.total_price (çmimi final i ofertuar). */
+/** Përmbledhje e fitimit sipas projektit. Të ardhurat krahasohen pa TVSH me shpenzimet. */
 export async function fetchProfitSummaryByProject(): Promise<ProfitSummary[]> {
   if (!supabase) return [];
-  const { data: items } = await supabase.from('project_items').select('id, project_id, total_price, projects(name, actual_total_cost)');
-  const { data: expenses } = await supabase.from('item_expenses').select('project_item_id, total_cost');
+  const [itemsResult, expensesResult] = await Promise.all([
+    supabase.from('project_items').select('id, project_id, total_price, vat_percent, projects(name, actual_total_cost)'),
+    supabase.from('item_expenses').select('project_item_id, total_cost'),
+  ]);
+  if (itemsResult.error) throw new Error(`Pozicionet nuk u lexuan për analizën: ${itemsResult.error.message}`);
+  if (expensesResult.error) throw new Error(`Kostot nuk u lexuan për analizën: ${expensesResult.error.message}`);
+  const items = itemsResult.data;
+  const expenses = expensesResult.data;
   if (!items) return [];
 
   const costByItem = new Map<string, number>();
@@ -81,30 +92,31 @@ export async function fetchProfitSummaryByProject(): Promise<ProfitSummary[]> {
     costByItem.set(key, (costByItem.get(key) || 0) + (Number(exp.total_cost) || 0));
   });
 
-  const byProject = new Map<string, { name: string; cost: number; total: number; actualCost: number | null }>();
+  const byProject = new Map<string, { name: string; cost: number; netTotal: number; actualCost: number | null }>();
   items.forEach((item) => {
     const projectId = item.project_id as string;
     const projectsField = (item as { projects?: { name: string; actual_total_cost?: number | null } | { name: string; actual_total_cost?: number | null }[] | null }).projects;
     const projectData = Array.isArray(projectsField) ? projectsField[0] : projectsField;
     const cost = costByItem.get(item.id as string) || 0;
-    const total = Number(item.total_price) || 0;
+    const vatPercent = Number(item.vat_percent ?? 18);
+    const netTotal = netAmountFromGross(Number(item.total_price) || 0, vatPercent);
     const existing = byProject.get(projectId) || {
       name: projectData?.name || 'Projekt',
       cost: 0,
-      total: 0,
+      netTotal: 0,
       actualCost: projectData?.actual_total_cost ?? null,
     };
     existing.cost += cost;
-    existing.total += total;
+    existing.netTotal += netTotal;
     byProject.set(projectId, existing);
   });
 
   return Array.from(byProject.entries()).map(([projectId, v]) => {
     const plannedCost = Number(v.cost.toFixed(2));
-    const plannedTotal = Number(v.total.toFixed(2));
+    const plannedTotal = Number(v.netTotal.toFixed(2));
     const actualCost = v.actualCost != null ? Number(v.actualCost) : null;
-    const realProfitAmount = actualCost != null ? Number((v.total - actualCost).toFixed(2)) : null;
-    const realProfitPercent = actualCost != null && actualCost > 0 ? Number((((v.total - actualCost) / actualCost) * 100).toFixed(1)) : null;
+    const realProfitAmount = actualCost != null ? Number((v.netTotal - actualCost).toFixed(2)) : null;
+    const realProfitPercent = actualCost != null && actualCost > 0 ? Number((((v.netTotal - actualCost) / actualCost) * 100).toFixed(1)) : null;
     const estimateErrorPercent =
       actualCost != null && actualCost > 0 ? Number((((plannedCost - actualCost) / actualCost) * 100).toFixed(1)) : null;
 
@@ -113,8 +125,8 @@ export async function fetchProfitSummaryByProject(): Promise<ProfitSummary[]> {
       projectName: v.name,
       plannedCost,
       plannedTotal,
-      profitAmount: Number((v.total - v.cost).toFixed(2)),
-      profitPercentAchieved: v.cost > 0 ? Number((((v.total - v.cost) / v.cost) * 100).toFixed(1)) : 0,
+      profitAmount: Number((v.netTotal - v.cost).toFixed(2)),
+      profitPercentAchieved: v.cost > 0 ? Number((((v.netTotal - v.cost) / v.cost) * 100).toFixed(1)) : 0,
       actualCost,
       realProfitAmount,
       realProfitPercent,

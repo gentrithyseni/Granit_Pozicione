@@ -7,7 +7,7 @@ import { TRANSPORT_OPTIONS } from '../constants/transport';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabase';
-import { ensureDefaultCategories } from '../services/categories';
+import { ensureDefaultCategories, uniqueCategories } from '../services/categories';
 import { saveRegisterRow, type RegisterFormValues } from '../services/register';
 import type { DbCategory, DbProject } from '../types/database';
 
@@ -143,13 +143,18 @@ export function RegisterPage() {
 
   useEffect(() => {
     async function load() {
-      const cats = await ensureDefaultCategories();
-      setCategories(cats);
-      if (!supabase) return;
-      const { data } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
-      if (data) setProjects(data);
+      try {
+        const cats = await ensureDefaultCategories();
+        setCategories(cats);
+        if (!supabase) return;
+        const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
+        if (error) throw new Error(`Projektet nuk u ngarkuan: ${error.message}`);
+        if (data) setProjects(data);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : 'Të dhënat e regjistrimit nuk u ngarkuan.', 'error');
+      }
     }
-    load();
+    void load();
   }, []);
 
   useEffect(() => {
@@ -176,6 +181,9 @@ export function RegisterPage() {
       setCategories(cats);
       reset({ ...values, description: '', newProjectName: '', newCategoryName: '' });
       showToast('Rreshti u ruajt me sukses.', 'success');
+      if (result.priceHistoryError) {
+        showToast(`Pozicioni u ruajt, por historiku i çmimeve jo: ${result.priceHistoryError}`, 'error');
+      }
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Gabim gjatë ruajtjes', 'error');
     } finally {
@@ -252,7 +260,7 @@ export function RegisterPage() {
                 Kategoria
                 <select {...register('categoryId')}>
                   <option value="">-- Zgjidh Kategorinë --</option>
-                  {categories.map((category) => (
+                  {uniqueCategories(categories).map((category) => (
                     <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
                   <option value="NEW">+ Kategori e re (emër tjetër)...</option>

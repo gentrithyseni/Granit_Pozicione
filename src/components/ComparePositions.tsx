@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { DbProjectItem } from '../types/database';
 import { formatDateTime } from '../lib/dates';
+import { categoryDisplayName } from '../services/categories';
 
 type ItemWithMeta = DbProjectItem & {
   projects?: { name: string } | null;
@@ -17,7 +18,7 @@ type Props = {
 
 function labelFor(item: ItemWithMeta) {
   const project = item.projects?.name || 'Projekt';
-  const cat = item.categories?.name ? ` · ${item.categories.name}` : '';
+  const cat = item.categories?.name ? ` · ${categoryDisplayName(item.categories.name)}` : '';
   const desc = item.description.slice(0, 40);
   return `${project}${cat} — ${desc} — ${Number(item.total_price).toFixed(2)}€`;
 }
@@ -29,7 +30,7 @@ function CompareColumn({ item, other }: { item: ItemWithMeta; other?: ItemWithMe
   return (
     <div className="compare-column">
       <h4 className="compare-column-title">{item.projects?.name || 'Projekt'}</h4>
-      <p className="muted">{item.categories?.name || 'Pa kategori'}</p>
+      <p className="muted">{item.categories?.name ? categoryDisplayName(item.categories.name) : 'Pa kategori'}</p>
       <dl className="compare-dl">
         <dt>Përshkrimi</dt>
         <dd>{item.description}</dd>

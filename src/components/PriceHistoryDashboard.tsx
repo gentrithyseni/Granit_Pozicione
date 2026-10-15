@@ -2,37 +2,62 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CircleDollarSign } from 'lucide-react';
 import type { DbCategory } from '../types/database';
 import { fetchPriceTrend, fetchProfitSummaryByProject, type PriceTrendPoint, type ProfitSummary } from '../services/priceHistory';
+import { categoryNameKey, uniqueCategories } from '../services/categories';
 
 type Props = {
   categories: DbCategory[];
+  refreshKey?: number;
 };
 
 /** Dashboard analize: (1) si ndryshon çmimi i një kategorie me kohë, (2) fitimi i planifikuar
  * (çmimi i ofertuar minus koston e regjistruar) sipas projektit. Të dhënat vijnë nga
  * price_history (snapshot çdo herë që regjistrohet/redaktohet një pozicion) dhe item_expenses. */
-export function PriceHistoryDashboard({ categories }: Props) {
+export function PriceHistoryDashboard({ categories, refreshKey = 0 }: Props) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [trend, setTrend] = useState<PriceTrendPoint[]>([]);
   const [profitSummary, setProfitSummary] = useState<ProfitSummary[]>([]);
+  const [profitSummaryError, setProfitSummaryError] = useState<string | null>(null);
+  const [trendError, setTrendError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const displayCategories = uniqueCategories(categories);
 
   useEffect(() => {
-    fetchProfitSummaryByProject().then(setProfitSummary);
-  }, []);
+    setProfitSummaryError(null);
+    fetchProfitSummaryByProject()
+      .then(setProfitSummary)
+      .catch((error: unknown) => setProfitSummaryError(error instanceof Error ? error.message : 'Analiza e fitimit dështoi.'));
+  }, [refreshKey]);
 
   useEffect(() => {
     if (!selectedCategoryId) {
       setTrend([]);
+      setTrendError(null);
       return;
     }
+    let active = true;
     setLoading(true);
-    fetchPriceTrend(selectedCategoryId)
-      .then(setTrend)
-      .finally(() => setLoading(false));
-  }, [selectedCategoryId]);
+    setTrendError(null);
+    const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
+    const matchingCategoryIds = selectedCategory
+      ? categories.filter((category) => categoryNameKey(category.name) === categoryNameKey(selectedCategory.name)).map((category) => category.id)
+      : [selectedCategoryId];
+    fetchPriceTrend(matchingCategoryIds)
+      .then((data) => {
+        if (active) setTrend(data);
+      })
+      .catch((error: unknown) => {
+        if (active) setTrendError(error instanceof Error ? error.message : 'Historiku i çmimeve dështoi.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [categories, selectedCategoryId]);
 
   const topProfitProjects = [...profitSummary].sort((a, b) => b.profitPercentAchieved - a.profitPercentAchieved).slice(0, 8);
-  const selectedCategoryName = categories.find((category) => category.id === selectedCategoryId)?.name || '';
+  const selectedCategoryName = displayCategories.find((category) => category.id === selectedCategoryId)?.name || '';
   const trendStats = useMemo(() => {
     if (trend.length === 0) return null;
     const first = trend[0].unitPrice;
@@ -45,11 +70,11 @@ export function PriceHistoryDashboard({ categories }: Props) {
   const maxProfit = Math.max(...topProfitProjects.map((project) => Math.abs(project.profitPercentAchieved)), 1);
 
   return (
-    <div className="panel panel-top-gap">
+    <div id="price-analysis" className="panel panel-top-gap">
       <div className="price-history-heading">
         <div>
           <h3 className="panel-heading-accent"><BarChart3 size={17} className="panel-heading-icon" /> Analiza e çmimeve</h3>
-          <p className="muted">Krahaso çmimin e pozicioneve me kohë dhe shiko cilat projekte kanë rezultat më të mirë.</p>
+          <p className="muted">Fitimi llogaritet nga vlera pa TVSH kundrejt kostove dhe shprehet si përqindje mbi koston.</p>
         </div>
         <span className="price-history-purpose">Për vendimmarrje</span>
       </div>
@@ -61,13 +86,14 @@ export function PriceHistoryDashboard({ categories }: Props) {
             <label className="price-history-select-label">Kategoria
               <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
                 <option value="">-- Zgjidh kategorinë --</option>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                {displayCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </select>
             </label>
           </div>
 
           {!selectedCategoryId && <p className="muted field-hint">Zgjidh një kategori për të parë trendin e çmimit.</p>}
           {selectedCategoryId && loading && <p className="muted field-hint">Duke ngarkuar...</p>}
+          {selectedCategoryId && trendError && <p className="field-error">{trendError}</p>}
           {selectedCategoryId && !loading && trend.length === 0 && (
             <p className="muted field-hint">Ende s'ka histori çmimesh për këtë kategori (regjistro ose redakto një pozicion për të filluar).</p>
           )}
@@ -99,7 +125,8 @@ export function PriceHistoryDashboard({ categories }: Props) {
             <div><span className="price-history-kicker">Krahasimi</span><h4 className="price-history-subheading">Rezultati sipas projektit</h4></div>
             <CircleDollarSign size={20} className="price-history-box-icon" />
           </div>
-          {topProfitProjects.length === 0 && <p className="muted field-hint">Ende s'ka të dhëna të mjaftueshme (regjistro pozicione me kosto materiali/pune).</p>}
+          {profitSummaryError && <p className="field-error">{profitSummaryError}</p>}
+          {!profitSummaryError && topProfitProjects.length === 0 && <p className="muted field-hint">Ende s'ka të dhëna të mjaftueshme (regjistro pozicione me kosto materiali/pune).</p>}
           {topProfitProjects.length > 0 && (
             <>
               <div className="profit-summary-strip"><div><span>Projektet</span><strong>{profitSummary.length}</strong></div><div><span>Më i larti</span><strong>{topProfitProjects[0].profitPercentAchieved}%</strong></div><div><span>Fitim real</span><strong>{topProfitProjects.filter((project) => project.realProfitPercent != null).length}</strong></div></div>

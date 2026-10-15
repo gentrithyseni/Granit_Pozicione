@@ -12,7 +12,7 @@ import { fetchDashboardStats } from '../services/stats';
 import { fetchProjectSummaries, fetchCategorySummaries, fetchTotalSystemValue, fetchTransportCityUsage, type CityUsageSummary } from '../services/insights';
 import { ensureDefaultCategories } from '../services/categories';
 import { fetchLibriExportRecords, summarizeLibriExportRecords, type LibriExportRecord } from '../services/libriExports';
-import { planLibriExport } from '../lib/libriExportPlan';
+import { planLibriExport, restoreLibriExportPlan } from '../lib/libriExportPlan';
 import { PROJECT_STATUSES } from '../constants/projectStatus';
 import type { DbProject, ProjectSummary, CategorySummary } from '../types/database';
 
@@ -34,27 +34,33 @@ export function HomePage() {
   const [recentParamasa, setRecentParamasa] = useState<LibriExportRecord | null>(null);
   const [libriSummary, setLibriSummary] = useState(() => summarizeLibriExportRecords([]));
   const [recentActionId, setRecentActionId] = useState<string | null>(null);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   useEffect(() => {
+    const reportError = (error: unknown) => {
+      setDashboardError(error instanceof Error ? error.message : 'Disa të dhëna të ballinës nuk u ngarkuan.');
+    };
     fetchDashboardStats().then(setStats);
-    fetchCompletedProjects().then(setReferences);
-    fetchTotalSystemValue().then(setTotalValue);
+    fetchCompletedProjects().then(setReferences).catch(reportError);
+    fetchTotalSystemValue().then(setTotalValue).catch(reportError);
     fetchLibriExportRecords().then((records) => {
       setRecentParamasa(records[0] ?? null);
       setLibriSummary(summarizeLibriExportRecords(records));
-    });
+    }).catch(reportError);
 
     (async () => {
       if (!supabase) return;
-      const [{ data: projects }, categories] = await Promise.all([
+      const [projectsResult, categories] = await Promise.all([
         supabase.from('projects').select('*').order('created_at', { ascending: false }),
         ensureDefaultCategories(),
       ]);
+      if (projectsResult.error) throw new Error(`Projektet nuk u ngarkuan: ${projectsResult.error.message}`);
+      const projects = projectsResult.data;
       setAllProjects(projects || []);
       setProjectSummaries(await fetchProjectSummaries(projects || []));
       setCategorySummaries(await fetchCategorySummaries(categories));
       setCityUsage(await fetchTransportCityUsage());
-    })();
+    })().catch(reportError);
   }, []);
 
   const today = useMemo(
@@ -111,9 +117,18 @@ export function HomePage() {
     setRecentActionId(recentParamasa.id);
     try {
       const { buildLibriNdertimorWorkbook, downloadWorkbookBuffer } = await import('../lib/libriExport');
-      const buffer = await buildLibriNdertimorWorkbook(recentParamasa.rows, recentParamasa.meta);
+      const pageLayout = restoreLibriExportPlan(recentParamasa.pageLayout, recentParamasa.rows);
+      const buffer = await buildLibriNdertimorWorkbook(
+        recentParamasa.rows,
+        recentParamasa.meta,
+        undefined,
+        undefined,
+        pageLayout ?? undefined
+      );
       const safeName = (recentParamasa.fileName || 'Paramasa').replace(/\.[^/.]+$/, '').replace(/\s+/g, ' ').trim() || 'Paramasa';
       downloadWorkbookBuffer(buffer, `${safeName}-Libri-Ndertimor.xlsx`);
+    } catch (error) {
+      setDashboardError(error instanceof Error ? error.message : 'Libri i fundit nuk u rigjenerua.');
     } finally {
       setRecentActionId(null);
     }
@@ -151,6 +166,7 @@ export function HomePage() {
         </div>
       </section>
 
+      {dashboardError && <p className="field-error" role="alert">{dashboardError}</p>}
 
       <section className="cards-grid">
         <NavLink className="big-card card" to="/register">

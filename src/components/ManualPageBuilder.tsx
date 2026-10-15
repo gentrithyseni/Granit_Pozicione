@@ -22,8 +22,7 @@ function templateCapacity(templateId: TemplateId): number {
 /** Rregullon listën e rreshtave sipas kapacitetit të shabllonit (1–5), duke ruajtur të dhënat ekzistuese. */
 function syncRowsToTemplate(current: ManualRow[], templateId: TemplateId): ManualRow[] {
   const targetCount = templateCapacity(templateId);
-  if (current.length === targetCount) return current;
-  if (current.length > targetCount) return current.slice(0, targetCount);
+  if (current.length >= targetCount) return current;
   return [...current, ...Array.from({ length: targetCount - current.length }, (_, i) => emptyRow(current.length + i))];
 }
 

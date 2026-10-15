@@ -45,6 +45,8 @@ export type DbProjectItem = {
   quantity: number;
   unit_price: number;
   total_price: number;
+  profit_percent?: number | null;
+  vat_percent?: number | null;
   created_at?: string;
   updated_at?: string | null;
   projects?: { name: string } | null;

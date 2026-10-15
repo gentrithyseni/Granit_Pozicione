@@ -15,14 +15,20 @@ import {
   buildLibriExportPositions,
   extractSectionAccountNumber,
   planLibriExport,
+  restoreLibriExportPlan,
+  serializeLibriExportPlan,
   type LibriExportPlanPage,
+  type StoredLibriExportPlanPage,
 } from './libriExportPlan';
 
 export {
   buildLibriExportPositions,
   extractSectionAccountNumber,
   planLibriExport,
+  restoreLibriExportPlan,
+  serializeLibriExportPlan,
   type LibriExportPlanPage,
+  type StoredLibriExportPlanPage,
 } from './libriExportPlan';
 
 const TEMPLATE_FILES: Record<TemplateId, string> = {

@@ -1,158 +1,127 @@
 # Graniti Web
 
-Graniti Web është një panel administrativ për menaxhimin e **paramasave, ofertave, faturave dhe Librit Ndërtimor** në ndërtim. Projekti përfshin regjistrim manual të pozicioneve, import Excel, preview të ndarjes së faqeve, kërkim global, analizë të të dhënave dhe eksport të rezultateve në Excel, ZIP, CSV dhe JSON.
+Graniti Web është një aplikacion për vlerësimin e ofertave dhe menaxhimin e të dhënave në projekte ndërtimore. Fokusi kryesor është **Libri Ndërtimor**: importi dhe kontrolli i paramasave, rregullimi i ndarjes në faqe, ruajtja e historikut dhe eksporti me shabllonet Excel.
 
-## Çfarë përfshin projekti
+## Funksionalitetet
 
-- regjistrim i pozicioneve me kalkulim të materialit, punës, ushqimit, transportit, fitimit dhe TVSH-së,
-- import i Excel-it me validim dhe preview,
-- gjenerim i Librit Ndërtimor me shabllone dhe ndarje faqeje,
-- krijim faturash me shabllone të veçanta,
-- dashboard me statistika, grafikë dhe historik,
-- kërkim global dhe menaxhim i të dhënave,
-- autentikim me Supabase dhe mbrojtje e route-ve,
-- backup JSON dhe eksport CSV.
+### Libri Ndërtimor dhe paramasat
 
-## Stack
+- Importon skedarë Excel `.xlsx` dhe `.xls`.
+- Lexon fletë të ndryshme dhe identifikon kolonat e pozicionit, përshkrimit, njësisë, sasisë dhe çmimit; mbështet edhe numra të formatuar me presje/pikë evropiane, si `1.234,56`.
+- Paraqet pozicionet në preview dhe krahason totalin e llogaritur me totalin e deklaruar në skedar, kur ky i fundit gjendet.
+- Planifikon ndarjen automatike në faqe sipas shablloneve origjinale të Librit Ndërtimor. Ndarja mund të përshtatet manualisht: faqet mund të bashkohen, ndahen dhe pozicionet të zhvendosen.
+- Eksporton Librin si Excel ose ZIP me skedarë Excel individualë për faqe.
+- Ruan historikun e importeve, të dhënat e preview-t dhe faqosjen manuale në Supabase, kur databaza është e konfiguruar.
 
-- React 18 + TypeScript + Vite 6
-- React Router 6
-- Supabase (PostgreSQL + Auth + RLS)
-- react-hook-form, xlsx, exceljs, jszip, lucide-react, victory, date-fns
+### Menaxhimi i projekteve dhe ofertave
+
+- Regjistron pozicione dhe llogarit materialin, punën, ushqimin, transportin, shpenzimet tjera, fitimin dhe TVSH-në.
+- Menaxhon projekte, kategori, statuset dhe pozicionet; ofron krahasim dhe analizë të të dhënave.
+- Paraqet përmbledhje statistikore, trend mujor të ofertave dhe historik të çmimeve.
+- Kërkon pozicione sipas përshkrimit, numrit, projektit ose kategorisë.
+- Eksporton të dhëna të projektit në CSV dhe backup të të dhënave në JSON.
+
+### Faturat
+
+Krijon faturë kontrate dhe fletëdërgesë duke përdorur shabllonet përkatëse Excel.
+
+## Teknologjitë
+
+- React 18, TypeScript dhe Vite
+- React Router 6 dhe React Hook Form
+- Supabase për PostgreSQL dhe autentikim
+- ExcelJS, SheetJS (`xlsx`) dhe JSZip për import/eksport të Excel-it dhe ZIP-it
+- Victory për grafikët dhe Lucide React për ikonat
 
 ## Struktura kryesore
 
-- [App.tsx](App.tsx) për router-in dhe provider-at globalë
-- [src/pages](src/pages) për faqet kryesore
-- [src/components](src/components) për komponentët e përbashkët dhe preview
-- [src/context](src/context) për Auth, Theme dhe Toast
-- [src/services](src/services) për logjikën e biznesit dhe thirrjet Supabase
-- [src/lib](src/lib) për llogaritje, validim, import/export
-- [database-schema.sql](database-schema.sql) për skemën e databazës dhe RLS
-- [Fatura](Fatura) dhe [Paramasa](Paramasa) për shabllone dhe materiale shembull
-- [DOKUMENTI_DIPLOMES.md](DOKUMENTI_DIPLOMES.md) dhe [DOKUMENTI_DIPLOMES.html](DOKUMENTI_DIPLOMES.html) për dokumentin e diplomës
+- `App.tsx` — rrugët dhe provider-at globalë
+- `src/pages/` — faqet e aplikacionit
+- `src/components/` — komponentët e ndërfaqes dhe preview-t
+- `src/services/` — logjika e shërbimeve dhe qasja në Supabase
+- `src/lib/` — llogaritjet, validimi dhe logjika e importit/eksportit
+- `public/templates/` — shabllonet Excel të Librit Ndërtimor, faturës dhe fletëdërgesës
+- `DOKUMENTI_DIPLOMES.md` dhe `DOKUMENTI_DIPLOMES.html` — dokumentet e punimit të diplomës
 
 ## Kërkesat
 
-- Node.js 18+
-- Llogari [Supabase](https://supabase.com) (projekt i ri ose ekzistues)
+- Node.js 18 ose më i ri
+- npm
+- Projekt Supabase i konfiguruar për aplikacionin
 
-## Instalimi
+## Instalimi dhe nisja lokale
+
+Instalo varësitë:
 
 ```bash
 npm install
-cp .env.example .env
 ```
 
-Plotëso `.env` me URL dhe anon key nga Supabase → **Settings → API**.
+Krijo `.env` nga `.env.example` dhe plotëso kredencialet e projektit Supabase:
 
-## Baza e të dhënave
+```powershell
+Copy-Item .env.example .env
+```
 
-1. Hap **SQL Editor** në Supabase Dashboard.
-2. Ekzekuto skedarin [`database-schema.sql`](database-schema.sql) për tabelat dhe RLS.
-3. Në **Authentication → Providers**, aktivizo **Email** (password).
-4. Krijo përdoruesin e parë te **Authentication → Users → Add user**.
+Vlerat e kërkuara janë:
 
-Skema përfshin tabelat kryesore:
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
 
-- `categories`
-- `projects`
-- `project_items`
-- `item_expenses`
-- `import_history`
-
-Politikat RLS lejojnë vetëm përdorues të **autentifikuar** (`authenticated`).
-
-## Nisja lokale
+Pastaj nise aplikacionin:
 
 ```bash
 npm run dev
 ```
 
-Hap `http://localhost:5173` dhe hyr me email/fjalëkalim në `/login`.
+Hap adresën lokale të paraqitur nga Vite (zakonisht `http://localhost:5173`).
+
+### Supabase dhe databaza
+
+Aplikacioni përdor tabelat `projects`, `categories`, `project_items`, `item_expenses`, `price_history`, `libri_exports` dhe `profiles`, si dhe funksionet RPC `save_register_position`, `update_project_position` dhe `mark_approval_notice_seen`.
+
+Ky repository **nuk përmban skemën SQL të databazës ose migrimet**. Për një instalim të ri, duhet të krijohen tabelat, funksionet RPC dhe politikat RLS që përputhen me aplikacionin përpara përdorimit. Mos supozo se konfigurimi i `.env` krijon automatikisht databazën.
+
+Për autentikim, konfiguro Supabase Auth dhe përdoruesit sipas politikës së projektit. Përdoruesit e aplikacionit duhet të kenë vetëm qasjen që lejojnë politikat RLS të databazës.
+
+## Rrugët e aplikacionit
+
+| Rruga | Funksioni |
+|---|---|
+| `/` | Ballina me statistika, projekte dhe përmbledhje të Librit Ndërtimor |
+| `/import` | Importi, preview, faqosja dhe eksporti i Librit Ndërtimor |
+| `/register` | Regjistrimi dhe llogaritja e pozicioneve |
+| `/data` | Menaxhimi, filtrimi, krahasimi dhe analiza e projekteve/pozicioneve |
+| `/search` | Kërkimi global |
+| `/fature` | Fatura e kontratës dhe fletëdërgesa |
+| `/profile` | Profili, ndryshimi i fjalëkalimit dhe backup-i |
+| `/about-us` | Informacion rreth aplikacionit |
+| `/login` | Hyrja, regjistrimi dhe rikuperimi i fjalëkalimit |
+
+Faqet kryesore mbrohen me autentikim kur Supabase është i konfiguruar.
 
 ## Skriptet
 
-| Komanda | Përshkrim |
-|---------|-----------|
-| `npm run dev` | Server zhvillimi |
-| `npm run build` | Build prod (`dist/`) |
-| `npm run preview` | Preview i build-it |
-| `npm run test` | Testet me Vitest |
-| `npm run lint` | Kontrolli i kodit me ESLint |
+| Komanda | Përshkrimi |
+|---|---|
+| `npm run dev` | Nis serverin e zhvillimit |
+| `npm run build` | Kontrollon TypeScript-in dhe krijon build-in te `dist/` |
+| `npm run preview` | Shërben lokalisht build-in |
+| `npm test` | Nis Vitest në modalitetin interaktiv |
+| `npm exec -- vitest run` | Ekzekuton testet një herë |
+| `npm run lint` | Nis ESLint, nëse është i instaluar/konfiguruar |
 
-## Faqet kryesore
+## Siguria dhe mirëmbajtja
 
-| Rruga | Funksioni |
-|-------|-----------|
-| `/` | Ballina me statistika, status projekte dhe grafikë |
-| `/register` | Regjistrim pozicioni me kostot e detajuara |
-| `/fature` | Krijim faturash me shabllone |
-| `/import` | Ngarkim Excel, preview, eksport Libri Ndërtimor |
-| `/data` | Projektet, kategoritë, editimi, krahasimi, CSV |
-| `/search` | Kërkim global në pozicione |
-| `/profile` | Profili, password change, backup JSON |
-| `/login` | Hyrje, regjistrim, recovery password |
-
-## Features
-
-| Funksioni | Përshkrimi |
-|-----------|------------|
-| Menaxhim projektesh | Krijim, editim, fshirje dhe përditësim i projekteve |
-| Regjistrim pozicionesh | Futje manuale me llogaritje të detajuara të kostos |
-| Import Excel | Lexim, validim dhe preview i të dhënave nga skedarët Excel |
-| Libri Ndërtimor | Gjenerim i faqeve, planifikim dhe eksport i faqeve |
-| Faturim | Krijim faturash me dy modele të ndryshme |
-| Analizë dhe grafikë | Dashboard, histori çmimesh dhe përmbledhje statistikore |
-| Kërkim global | Kërkim në projekte, kategori dhe pozicione |
-| Backup / eksport | Export CSV, ZIP, Excel dhe JSON |
-| Auth dhe siguri | Login, register, recovery dhe RLS në Supabase |
-
-## Screenshot / Preview
-
-Për versionin final të dorëzimit është mirë të shtohen screenshot-e nga këto pjesë:
-
-- ballina / dashboard,
-- faqja e regjistrimit,
-- preview i Importit dhe Librit Ndërtimor,
-- faqja e të dhënave,
-- kërkimi global,
-- profili dhe backup-u,
-- një screenshot i faqes së faturës.
-
-Nëse i fut në README ose në dokumentin e diplomës, projekti duket më i plotë dhe më bindës vizualisht.
+- Mos e vendos `.env` në Git. Çelësi Supabase `anon` përdoret në frontend; kontrolli i qasjes duhet të zbatohet me autentikim dhe politika RLS.
+- Importo vetëm skedarë Excel të besuar dhe mbaji varësitë të përditësuara. Versioni `xlsx` i përdorur aktualisht (`0.18.5`) është raportuar nga `npm audit` me advisories të njohura; vlerëso zëvendësimin ose përditësimin e tij përpara përdorimit me skedarë nga burime të panjohura.
+- Pas ndryshimeve, verifiko projektin me `npm run build` dhe `npm exec -- vitest run`.
 
 ## Dokumenti i diplomës
 
-Për këtë projekt është përgatitur edhe dokumentacion formal:
+- [DOKUMENTI_DIPLOMES.md](DOKUMENTI_DIPLOMES.md) — versioni tekstual për editim
+- [DOKUMENTI_DIPLOMES.html](DOKUMENTI_DIPLOMES.html) — versioni për hapje në shfletues dhe kopjim në Word
 
-- [DOKUMENTI_DIPLOMES.md](DOKUMENTI_DIPLOMES.md)
-- [DOKUMENTI_DIPLOMES.html](DOKUMENTI_DIPLOMES.html)
-
-Versioni HTML është i përshtatshëm për hapje në browser dhe kopjim në Word, ndërsa versioni Markdown shërben si bazë tekstuale e lehtë për editim.
-
-## Materialet shembull
-
-- [Fatura](Fatura) për shabllonet e faturave
-- [Paramasa](Paramasa) për skedarët Excel të paramasave dhe Librit Ndërtimor
-
-## Shënim sigurie
-
-Mos commit-o `.env`. Çelësi `anon` është publik në frontend; mbrojtja vjen nga **Auth + RLS**, jo nga fshehja e key-it.
-
-## Zhvillim i mëtejshëm
-
-- PDF eksport më i avancuar
-- role të ndryshme përdoruesish
-- raporte dhe grafikë shtesë
-- integrim me module financiare
-- audit log më i plotë për ndryshimet
-
-## Si ta përdorësh si temë diplome
-
-1. Përdor [DOKUMENTI_DIPLOMES.html](DOKUMENTI_DIPLOMES.html) si bazë për Word, pastaj shto faqen e titullit dhe përmbajtjen automatike.
-2. Shto screenshot-e reale nga aplikacioni në seksionin e figurave.
-3. Vendos emrin, mbiemrin, mentorin dhe institucionin në fushat e zbrazëta.
-4. Nëse profesori kërkon raport më të gjatë, zgjero kapitullin e testimit dhe vlerësimit me shembuj konkretë.
-5. Ruaje [DOKUMENTI_DIPLOMES.md](DOKUMENTI_DIPLOMES.md) si version pune dhe [DOKUMENTI_DIPLOMES.html](DOKUMENTI_DIPLOMES.html) si version për kopjim në Word.
-
+Para dorëzimit, plotëso të dhënat personale/institucionale që mungojnë dhe shto screenshot-e reale të aplikacionit nëse kërkohen.

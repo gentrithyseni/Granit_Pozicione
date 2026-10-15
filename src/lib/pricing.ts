@@ -24,6 +24,12 @@ export type PricingBreakdown = {
   unitPrice: number;
 };
 
+export function netAmountFromGross(grossAmount: number, vatPercent: number): number {
+  const vatMultiplier = 1 + Number(vatPercent) / 100;
+  if (!Number.isFinite(grossAmount) || !Number.isFinite(vatMultiplier) || vatMultiplier <= 0) return 0;
+  return grossAmount / vatMultiplier;
+}
+
 /** Llogarit koston e një pozicioni paramase. */
 export function calculatePositionPrice(input: PricingInput): PricingBreakdown {
   const quantity = Number(input.quantity) || 0;

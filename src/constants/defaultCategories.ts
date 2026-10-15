@@ -10,6 +10,6 @@ export const DEFAULT_CATEGORIES: { name: string; description: string }[] = [
   { name: 'Dritare & Dyer', description: 'Montim dritaresh, dyerve, alumini' },
   { name: 'Izolim Termik', description: 'Izolim, polistirol, termoizolim' },
   { name: 'Punët e Tokës', description: 'Gërmim, mbushje, nivelim toke' },
-  { name: 'Metalik & Weld', description: 'Konstruksione metalike, saldim' },
+  { name: 'Metalik & Saldim', description: 'Konstruksione metalike, saldim' },
   { name: 'Tjera', description: 'Pozicione që nuk përshtaten në kategori tjetër' },
 ];

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { BarChart3, FolderKanban, Layers3, Search, WalletCards } from 'lucide-react';
 import { Shell } from '../components/Shell';
+import { categoryDisplayName } from '../services/categories';
 import { searchPositions } from '../services/search';
 import type { SearchResultItem } from '../types/database';
 
@@ -12,6 +13,7 @@ export function SearchPage() {
   const query = watch('query');
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const resultSummary = useMemo(() => ({
     projects: new Set(results.map((item) => item.project_id)).size,
     categories: new Set(results.map((item) => item.category_id).filter(Boolean)).size,
@@ -20,18 +22,32 @@ export function SearchPage() {
 
   useEffect(() => {
     const trimmed = query.trim();
+    let active = true;
     if (trimmed.length < 2) {
       setResults([]);
+      setSearchError(null);
+      setLoading(false);
       return;
     }
 
     const timer = window.setTimeout(async () => {
+      setResults([]);
       setLoading(true);
-      setResults(await searchPositions(trimmed));
-      setLoading(false);
+      setSearchError(null);
+      try {
+        const nextResults = await searchPositions(trimmed);
+        if (active) setResults(nextResults);
+      } catch (error) {
+        if (active) setSearchError(error instanceof Error ? error.message : 'Kërkimi dështoi.');
+      } finally {
+        if (active) setLoading(false);
+      }
     }, 350);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [query]);
 
   return (
@@ -70,7 +86,9 @@ export function SearchPage() {
 
       {loading && <p className="muted search-status">Duke kërkuar...</p>}
 
-      {!loading && query.trim().length >= 2 && results.length === 0 && (
+      {searchError && <p className="field-error search-status">{searchError}</p>}
+
+      {!loading && !searchError && query.trim().length >= 2 && results.length === 0 && (
         <p className="muted search-status">Nuk u gjet asnjë rezultat.</p>
       )}
 
@@ -98,7 +116,7 @@ export function SearchPage() {
                 {results.map((item) => (
                   <tr key={item.id} className="import-table-body-row">
                     <td className="import-table-cell">{item.projects?.name || '-'}</td>
-                    <td className="import-table-cell">{item.categories?.name || '-'}</td>
+                    <td className="import-table-cell">{item.categories?.name ? categoryDisplayName(item.categories.name) : '-'}</td>
                     <td className="import-table-cell">{item.position_number || '-'}</td>
                     <td>{item.description}</td>
                     <td className="col-bold">{Number(item.total_price).toFixed(2)}€</td>
