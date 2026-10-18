@@ -123,7 +123,7 @@ export function ImportPage() {
   const [historyGroupingMode, setHistoryGroupingMode] = useState<PageGroupingMode>('auto');
   const [historyManualPlan, setHistoryManualPlan] = useState<LibriExportPlanPage[] | null>(null);
   const [historyActionId, setHistoryActionId] = useState<string | null>(null);
-  const { showToast } = useToast();
+  const { showToast, showSavedToast } = useToast();
   const layoutSaveQueue = useRef<Promise<void>>(Promise.resolve());
 
   const reloadLibriHistory = () => {
@@ -173,27 +173,42 @@ export function ImportPage() {
     const meta = historyRecord?.meta ?? previewMeta;
     const currentMode = historyRecord ? historyGroupingMode : groupingMode;
     const currentPlan = historyRecord ? historyManualPlan : manualPlan;
+    const persistedRecord = libriHistory.find((record) => record.id === targetId);
     const storedPlan = currentMode === 'manual' && currentPlan
       ? serializeLibriExportPlan(currentPlan, sourceRows)
       : null;
-    const persistedRecord = libriHistory.find((record) => record.id === targetId);
+    const storedManualPlan = currentPlan
+      ? serializeLibriExportPlan(currentPlan, sourceRows)
+      : persistedRecord?.manualPageLayout ?? null;
 
     if (currentMode === 'manual' && currentPlan && !storedPlan) {
-      showToast('Ndarja e faqeve nuk u ruajt sepse disa pozicione mungojnë ose janë të përsëritura.', 'error');
       return;
     }
-    if (persistedRecord && JSON.stringify(persistedRecord.pageLayout) === JSON.stringify(storedPlan)) return;
+    if (currentPlan && !storedManualPlan) {
+      return;
+    }
+    if (
+      persistedRecord &&
+      JSON.stringify(persistedRecord.pageLayout) === JSON.stringify(storedPlan) &&
+      JSON.stringify(persistedRecord.manualPageLayout) === JSON.stringify(storedManualPlan)
+    ) return;
 
     let active = true;
     const timeoutId = window.setTimeout(() => {
       const saveOperation = layoutSaveQueue.current
-        .then(() => saveLibriExportPageLayout(targetId, meta, storedPlan))
+        .then(() => saveLibriExportPageLayout(targetId, meta, storedPlan, storedManualPlan))
         .then(() => {
           if (!active) return;
           setLibriHistory((current) => {
             const record = current.find((item) => item.id === targetId);
-            if (!record || JSON.stringify(record.pageLayout) === JSON.stringify(storedPlan)) return current;
-            return current.map((item) => item.id === targetId ? { ...item, pageLayout: storedPlan } : item);
+            if (
+              !record ||
+              (JSON.stringify(record.pageLayout) === JSON.stringify(storedPlan) &&
+                JSON.stringify(record.manualPageLayout) === JSON.stringify(storedManualPlan))
+            ) return current;
+            return current.map((item) => item.id === targetId
+              ? { ...item, pageLayout: storedPlan, manualPageLayout: storedManualPlan }
+              : item);
           });
         })
         .catch((error: unknown) => {
@@ -231,26 +246,46 @@ export function ImportPage() {
     meta: ParamasaPreviewMeta,
     sourceRows: ParsedRow[],
     mode: PageGroupingMode,
-    plan: LibriExportPlanPage[] | null
+    plan: LibriExportPlanPage[] | null,
+    lastManualPlan: LibriExportPlanPage[] | null = mode === 'manual' ? plan : null
   ): Promise<boolean> => {
+    const persistedRecord = libriHistory.find((record) => record.id === id);
     const storedPlan = mode === 'manual' && plan
       ? serializeLibriExportPlan(plan, sourceRows)
       : null;
+    const storedManualPlan = lastManualPlan
+      ? serializeLibriExportPlan(lastManualPlan, sourceRows)
+      : persistedRecord?.manualPageLayout ?? (mode === 'manual' ? storedPlan : null);
     if (mode === 'manual' && plan && !storedPlan) {
-      showToast('Ndarja e faqeve nuk u ruajt sepse disa pozicione mungojnë ose janë të përsëritura.', 'error');
+      showToast('Faqet nuk u ruajtën manualisht sepse disa pozicione mungojnë ose janë të përsëritura.', 'error');
       return false;
     }
-    const persistedRecord = libriHistory.find((record) => record.id === id);
-    if (persistedRecord && JSON.stringify(persistedRecord.pageLayout) === JSON.stringify(storedPlan)) return true;
+    if (lastManualPlan && !storedManualPlan) {
+      showToast('Faqet nuk u ruajtën manualisht sepse disa pozicione mungojnë ose janë të përsëritura.', 'error');
+      return false;
+    }
+    if (
+      persistedRecord &&
+      JSON.stringify(persistedRecord.pageLayout) === JSON.stringify(storedPlan) &&
+      JSON.stringify(persistedRecord.manualPageLayout) === JSON.stringify(storedManualPlan)
+    ) return true;
 
-    const saveOperation = layoutSaveQueue.current.then(() => saveLibriExportPageLayout(id, meta, storedPlan));
+    const saveOperation = layoutSaveQueue.current.then(() =>
+      saveLibriExportPageLayout(id, meta, storedPlan, storedManualPlan)
+    );
     layoutSaveQueue.current = saveOperation.catch(() => undefined);
     try {
       await saveOperation;
       setLibriHistory((current) => {
         const record = current.find((item) => item.id === id);
-        if (!record || JSON.stringify(record.pageLayout) === JSON.stringify(storedPlan)) return current;
-        return current.map((item) => item.id === id ? { ...item, pageLayout: storedPlan } : item);
+        if (
+          !record ||
+          (JSON.stringify(record.pageLayout) === JSON.stringify(storedPlan) &&
+            JSON.stringify(record.manualPageLayout) === JSON.stringify(storedManualPlan))
+        ) return current;
+        return current.map((item) => item.id === id
+          ? { ...item, pageLayout: storedPlan, manualPageLayout: storedManualPlan }
+          : item);
       });
       return true;
     } catch (error) {
@@ -338,18 +373,18 @@ export function ImportPage() {
     window.print();
   };
 
-  useEffect(() => {
-    setManualPlan(null);
-    setGroupingMode('auto');
-  }, [rows]);
-
   const handleGroupingModeChange = (mode: PageGroupingMode) => {
     setGroupingMode(mode);
-    if (mode === 'manual') {
+    if (mode === 'manual' && !manualPlan) {
       setManualPlan(autoPlan);
-    } else {
-      setManualPlan(null);
     }
+  };
+
+  const handleCancelImport = () => {
+    setRows([]);
+    setCurrentLibriExportId(null);
+    setManualPlan(null);
+    setGroupingMode('auto');
   };
 
   const handleDownloadLibriNdertimor = async () => {
@@ -358,7 +393,7 @@ export function ImportPage() {
     try {
       const plan = activePlan;
       const layoutSaved = currentLibriExportId
-        ? await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, plan)
+        ? await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, plan, manualPlan)
         : !supabase;
       const buffer = await buildLibriNdertimorWorkbook(rows, previewMeta, undefined, sectionTitleOverrides, plan);
       downloadWorkbookBuffer(buffer, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
@@ -388,7 +423,7 @@ export function ImportPage() {
     try {
       const plan = activePlan;
       const layoutSaved = currentLibriExportId
-        ? await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, plan)
+        ? await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, plan, manualPlan)
         : !supabase;
       const blob = await buildLibriNdertimorZip(rows, previewMeta, undefined, sectionTitleOverrides, plan);
       downloadBlob(blob, `${normalizeBaseName(fileName) || 'Paramasa'}-Libri-Ndertimor-faqet.zip`);
@@ -419,7 +454,7 @@ export function ImportPage() {
         ? historyManualPlan
         : restoreLibriExportPlan(record.pageLayout, record.rows);
       if (viewingHistoryId === record.id && historyGroupingMode === 'manual') {
-        await persistLayoutNow(record.id, record.meta, record.rows, historyGroupingMode, historyManualPlan);
+        await persistLayoutNow(record.id, record.meta, record.rows, historyGroupingMode, historyManualPlan, historyManualPlan);
       }
       const buffer = await buildLibriNdertimorWorkbook(record.rows, record.meta, undefined, undefined, pageLayout ?? undefined);
       downloadWorkbookBuffer(buffer, `${normalizeBaseName(record.fileName) || 'Paramasa'}-Libri-Ndertimor.xlsx`);
@@ -439,9 +474,15 @@ export function ImportPage() {
           openRecord.meta,
           openRecord.rows,
           historyGroupingMode,
+          historyManualPlan,
           historyManualPlan
         );
-        if (!saved) return;
+        if (!saved) {
+          const confirmed = window.confirm(
+            'Ndryshimet e faqeve nuk u ruajtën. A dëshiron ta mbyllësh pamjen gjithsesi? Ndryshimet e paruajtura do të humbin.'
+          );
+          if (!confirmed) return;
+        }
       }
       if (viewingHistoryId === record.id) {
         setViewingHistoryId(null);
@@ -450,8 +491,9 @@ export function ImportPage() {
     }
 
     const savedPlan = restoreLibriExportPlan(record.pageLayout, record.rows);
+    const savedManualPlan = restoreLibriExportPlan(record.manualPageLayout, record.rows) ?? savedPlan;
     setHistoryGroupingMode(savedPlan ? 'manual' : 'auto');
-    setHistoryManualPlan(savedPlan);
+    setHistoryManualPlan(savedManualPlan);
     setViewingHistoryId(record.id);
   };
 
@@ -473,10 +515,40 @@ export function ImportPage() {
 
   const handleFinish = async () => {
     if (currentLibriExportId && rows.length > 0) {
-      const saved = await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, activePlan);
+      const saved = await persistLayoutNow(currentLibriExportId, previewMeta, rows, groupingMode, activePlan, manualPlan);
       if (!saved) return;
     }
     navigate('/');
+  };
+
+  const handleSaveCurrentLayout = async (): Promise<boolean> => {
+    if (!currentLibriExportId) {
+      showToast('Libri nuk ka identifikues për ruajtjen e faqeve në histori.', 'error');
+      return false;
+    }
+    const saved = await persistLayoutNow(
+      currentLibriExportId,
+      previewMeta,
+      rows,
+      groupingMode,
+      activePlan,
+      manualPlan
+    );
+    if (saved) showSavedToast('Faqet u ruajtën në historikun e Librit.');
+    return saved;
+  };
+
+  const handleSaveHistoryLayout = async (record: LibriExportRecord): Promise<boolean> => {
+    const saved = await persistLayoutNow(
+      record.id,
+      record.meta,
+      record.rows,
+      historyGroupingMode,
+      historyManualPlan,
+      historyManualPlan
+    );
+    if (saved) showSavedToast('Faqet u ruajtën në historikun e Librit.');
+    return saved;
   };
 
   return (
@@ -653,6 +725,7 @@ export function ImportPage() {
                   onGroupingModeChange={handleGroupingModeChange}
                   manualPlan={manualPlan}
                   onManualPlanChange={setManualPlan}
+                  onSaveLayout={handleSaveCurrentLayout}
                   onPlanError={(message) => showToast(message, 'error')}
                 />
               </>
@@ -699,7 +772,7 @@ export function ImportPage() {
               <button className="card import-cancel-btn" type="button" onClick={handleDownloadLibriNdertimorZip} disabled={loading || zipExportLoading || rows.length === 0}>
                 {zipExportLoading ? 'Duke gjeneruar…' : 'Shkarko çdo faqe veç e veç (.zip)'}
               </button>
-              <button className="card import-cancel-btn" type="button" onClick={() => setRows([])} disabled={loading}>Anulo</button>
+              <button className="card import-cancel-btn" type="button" onClick={handleCancelImport} disabled={loading}>Anulo</button>
               <button
                 className="primary-button import-finish-btn"
                 type="button"
@@ -762,9 +835,15 @@ export function ImportPage() {
                         rows={record.rows}
                         meta={record.meta}
                         groupingMode={historyGroupingMode}
-                        onGroupingModeChange={setHistoryGroupingMode}
+                        onGroupingModeChange={(mode) => {
+                          setHistoryGroupingMode(mode);
+                          if (mode === 'manual' && !historyManualPlan) {
+                            setHistoryManualPlan(planLibriExport(record.rows));
+                          }
+                        }}
                         manualPlan={historyManualPlan}
                         onManualPlanChange={setHistoryManualPlan}
+                        onSaveLayout={() => handleSaveHistoryLayout(record)}
                         onPlanError={(message) => showToast(message, 'error')}
                       />
                     </div>

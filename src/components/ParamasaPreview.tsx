@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Layers, LayoutGrid, X } from 'lucide-react';
+import { Layers, LayoutGrid, Save, X } from 'lucide-react';
 import type { ParsedRow } from '../lib/excel';
 import { groupRowsBySection } from '../lib/paramasaPreview';
-import { planLibriExport, buildLibriExportPositions, buildLibriSinglePageWorkbook, downloadWorkbookBuffer, extractSectionAccountNumber, type LibriExportPlanPage } from '../lib/libriExport';
+import { planLibriExport, buildLibriExportPositions, buildLibriSinglePageWorkbook, downloadWorkbookBuffer, extractSectionAccountNumber, serializeLibriExportPlan, type LibriExportPlanPage } from '../lib/libriExport';
 import { mergeAdjacentPlanPages, splitPlanPage, movePositionToPage } from '../lib/libriPlanEditor';
 import type { ParamasaPreviewMeta } from '../types/paramasaMeta';
 
@@ -23,6 +23,7 @@ type Props = {
   manualPlan?: LibriExportPlanPage[] | null;
   onManualPlanChange?: (plan: LibriExportPlanPage[]) => void;
   onPlanError?: (message: string) => void;
+  onSaveLayout?: () => Promise<boolean>;
 };
 
 export function ParamasaPreview({
@@ -36,6 +37,7 @@ export function ParamasaPreview({
   manualPlan,
   onManualPlanChange,
   onPlanError,
+  onSaveLayout,
 }: Props) {
   const autoPlan = useMemo(
     () => planLibriExport(rows, sectionTitleOverrides),
@@ -54,6 +56,11 @@ export function ParamasaPreview({
   const isManual = groupingMode === 'manual' && Boolean(onManualPlanChange);
   const total = rows.reduce((sum, row) => sum + Number(row.total_price || 0), 0);
   const overflowCount = plan.filter((page) => page.overflowWarning).length;
+  const savedManualLayout = manualPlan ? serializeLibriExportPlan(manualPlan, rows) : null;
+  const automaticLayout = serializeLibriExportPlan(autoPlan, rows);
+  const hasDistinctManualLayout = Boolean(
+    savedManualLayout && JSON.stringify(savedManualLayout) !== JSON.stringify(automaticLayout)
+  );
   const [downloadingPage, setDownloadingPage] = useState<number | null>(null);
   const [expandedPage, setExpandedPage] = useState<number | null>(null);
   const [sectionsOpen, setSectionsOpen] = useState(false);
@@ -61,6 +68,7 @@ export function ParamasaPreview({
   const [splitTarget, setSplitTarget] = useState<number | null>(null);
   const comparisonLabel = isManual ? `Auto: ${autoPlan.length} faqe → tani: ${plan.length} faqe` : null;
   const [moveTarget, setMoveTarget] = useState<{ pageIndex: number; rowIndex: number } | null>(null);
+  const [savingLayout, setSavingLayout] = useState(false);
 
   useEffect(() => {
     if (expandedPage === null) return;
@@ -140,7 +148,7 @@ export function ParamasaPreview({
                   className={`filter-chip ${groupingMode === 'auto' ? 'active' : ''}`}
                   onClick={() => onGroupingModeChange('auto')}
                 >
-                  Automatik
+                  Automatikisht
                 </button>
                 <button
                   type="button"
@@ -150,13 +158,40 @@ export function ParamasaPreview({
                     setGroupingOpen(true);
                   }}
                 >
-                  Manual
+                  Manualisht
                 </button>
               </div>
               {isManual && (
                 <button type="button" className="card libri-bar-btn" onClick={() => setGroupingOpen(true)}>
                   <LayoutGrid size={16} />
                   Rregullo faqet
+                </button>
+              )}
+              {!isManual && hasDistinctManualLayout && (
+                <button
+                  type="button"
+                  className="card libri-bar-btn"
+                  onClick={() => onGroupingModeChange('manual')}
+                >
+                  Përdor faqet e ruajtura manualisht ({manualPlan?.length} faqe)
+                </button>
+              )}
+              {onSaveLayout && (
+                <button
+                  type="button"
+                  className="card libri-bar-btn"
+                  disabled={savingLayout}
+                  onClick={async () => {
+                    setSavingLayout(true);
+                    try {
+                      await onSaveLayout();
+                    } finally {
+                      setSavingLayout(false);
+                    }
+                  }}
+                >
+                  <Save size={16} />
+                  {savingLayout ? 'Duke ruajtur…' : 'Ruaj Faqet'}
                 </button>
               )}
             </>
@@ -168,9 +203,10 @@ export function ParamasaPreview({
         <div className="libri-manual-compare">
           <span className="muted">Krahasim i shpejtë</span>
           <strong>{comparisonLabel}</strong>
-          <button type="button" className="card" onClick={() => onManualPlanChange?.(autoPlan)}>
-            Rikthe automatikun
+          <button type="button" className="card" onClick={() => onGroupingModeChange?.('auto')}>
+            Kalo në automatik
           </button>
+          <span className="libri-layout-save-note">Ruajtja e faqeve manualisht mbahet për rikthim.</span>
         </div>
       )}
 

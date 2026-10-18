@@ -5,14 +5,15 @@ import { useAuth } from '../hooks/useAuth';
 import { LoadingScreen } from './LoadingScreen';
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, loading, profileLoading } = useAuth();
+  const { user, session, profile, loading, profileLoading } = useAuth();
   const location = useLocation();
 
   if (!hasSupabaseConfig) {
     return <>{children}</>;
   }
 
-  if (loading || profileLoading) {
+  const profileCheckPending = Boolean(session?.user && profile?.id !== session.user.id);
+  if (loading || profileLoading || profileCheckPending) {
     return <LoadingScreen title="Duke kontrolluar qasjen" subtitle="Po verifikohet profili..." />;
   }
 

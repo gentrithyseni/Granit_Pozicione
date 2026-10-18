@@ -89,27 +89,45 @@ export function serializeLibriExportPlan(
   sourceRows: ParsedRow[]
 ): StoredLibriExportPlanPage[] | null {
   if (plan.length === 0 || sourceRows.length === 0) return null;
-  const rowIndexes = new Map(sourceRows.map((row, index) => [row, index]));
+  const rowIndexes = new Map<ParsedRow, number[]>();
+  const unmatchedIndexes = new Map<string, number[]>();
+  sourceRows.forEach((row, index) => {
+    const identityIndexes = rowIndexes.get(row) ?? [];
+    identityIndexes.push(index);
+    rowIndexes.set(row, identityIndexes);
+
+    const key = JSON.stringify(row);
+    const indexes = unmatchedIndexes.get(key) ?? [];
+    indexes.push(index);
+    unmatchedIndexes.set(key, indexes);
+  });
   const seen = new Set<number>();
   const storedPlan: StoredLibriExportPlanPage[] = [];
 
   for (const page of plan) {
-    const indexes = page.rows.map((row) => rowIndexes.get(row));
-    if (
-      indexes.length === 0 ||
-      page.rows.length > TEMPLATE_SLOTS[page.templateId].length ||
-      indexes.some((index) => index === undefined || (index !== undefined && seen.has(index)))
-    ) {
+    if (page.rows.length === 0 || page.rows.length > TEMPLATE_SLOTS[page.templateId].length) {
       return null;
     }
 
-    const validIndexes = indexes.filter((index): index is number => index !== undefined);
-    validIndexes.forEach((index) => seen.add(index));
+    const indexes: number[] = [];
+    for (const row of page.rows) {
+      let index = rowIndexes.get(row)?.find((candidate) => !seen.has(candidate));
+
+      if (index === undefined) {
+        const candidates = unmatchedIndexes.get(JSON.stringify(row));
+        index = candidates?.find((candidate) => !seen.has(candidate));
+      }
+      if (index === undefined || seen.has(index)) return null;
+
+      seen.add(index);
+      indexes.push(index);
+    }
+
     storedPlan.push({
       templateId: page.templateId,
       sectionKey: page.sectionKey,
       sectionLabel: page.sectionLabel,
-      rowIndexes: validIndexes,
+      rowIndexes: indexes,
       overflowWarning: page.overflowWarning,
       mixedUnitsWarning: page.mixedUnitsWarning,
     });

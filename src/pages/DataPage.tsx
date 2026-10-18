@@ -12,20 +12,27 @@ import { exportProjectCSV } from '../services/export';
 import { categoryNameKey, ensureDefaultCategories, groupItemsByProject, deleteCategory, uniqueCategories } from '../services/categories';
 import { updateProject, deleteProject, deletePosition } from '../services/projects';
 import { recordPriceSnapshot } from '../services/priceHistory';
-import { calculatePositionPrice } from '../lib/pricing';
+import { calculatePositionPrice, netAmountFromGross } from '../lib/pricing';
 import { PriceHistoryDashboard } from '../components/PriceHistoryDashboard';
 import { RevenueTrendChart } from '../components/RevenueTrendChart';
 import type { CategorySummary, DbCategory, DbProject, DbProjectItem, ItemWithMeta } from '../types/database';
 import { fetchCategorySummaries, fetchMonthlyRevenueTrend, type MonthlyRevenuePoint } from '../services/insights';
 
 const ITEM_SELECT = '*, projects(name), categories(name)';
+const formatProjectMoney = (amount: number) => `${amount.toLocaleString('sq-AL', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})} €`;
 
 export function DataPage() {
-  const { showToast } = useToast();
+  const { showToast, showSavedToast } = useToast();
   const [projectsList, setProjectsList] = useState<DbProject[]>([]);
   const [categoriesList, setCategoriesList] = useState<DbCategory[]>([]);
   const [selectedProject, setSelectedProject] = useState<DbProject | null>(null);
   const [projectItems, setProjectItems] = useState<ItemWithMeta[]>([]);
+  const [projectRegisteredCost, setProjectRegisteredCost] = useState<number | null>(null);
+  const [projectCostsLoading, setProjectCostsLoading] = useState(false);
+  const [projectCostsError, setProjectCostsError] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<DbCategory | null>(null);
   const [categoryItems, setCategoryItems] = useState<ItemWithMeta[]>([]);
   const [comparePool, setComparePool] = useState<ItemWithMeta[]>([]);
@@ -60,6 +67,7 @@ export function DataPage() {
   const [metaDescription, setMetaDescription] = useState('');
   const [metaActualCost, setMetaActualCost] = useState('');
   const [metaActualNotes, setMetaActualNotes] = useState('');
+  const [projectMetaSaving, setProjectMetaSaving] = useState(false);
   const [projectAnalysis, setProjectAnalysis] = useState<string[] | null>(null);
   const [monthlyRevenueTrend, setMonthlyRevenueTrend] = useState<MonthlyRevenuePoint[]>([]);
   const [trendStatus, setTrendStatus] = useState<ProjectStatus | 'all'>('all');
@@ -68,18 +76,21 @@ export function DataPage() {
   const [analysisRefreshKey, setAnalysisRefreshKey] = useState(0);
   const detailRequestId = useRef(0);
 
-  const reloadProjects = async () => {
-    if (!supabase) return;
+  const reloadProjects = async (): Promise<DbProject[] | null> => {
+    if (!supabase) return null;
     try {
       const cats = await ensureDefaultCategories();
       const { data: projects, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
       if (error) throw new Error(`Projektet nuk u ngarkuan: ${error.message}`);
       const summaries = await fetchCategorySummaries(cats);
-      setProjectsList(projects || []);
+      const refreshedProjects = (projects || []) as DbProject[];
+      setProjectsList(refreshedProjects);
       setCategoriesList(cats);
       setCategorySummaries(summaries);
+      return refreshedProjects;
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Të dhënat e projekteve nuk u rifreskuan.', 'error');
+      return null;
     }
   };
 
@@ -138,11 +149,17 @@ export function DataPage() {
     if (selectedProject?.id === project.id) {
       setSelectedProject(null);
       setProjectItems([]);
+      setProjectRegisteredCost(null);
+      setProjectCostsLoading(false);
+      setProjectCostsError(false);
       setSelectedItemId(null);
       setComparePool([]);
       return;
     }
     setSelectedProject(project);
+    setProjectRegisteredCost(null);
+    setProjectCostsLoading(true);
+    setProjectCostsError(false);
     setSelectedCategory(null);
     setProjectItems([]);
     setCategoryItems([]);
@@ -157,6 +174,9 @@ export function DataPage() {
     if (requestId !== detailRequestId.current) return;
     if (error) {
       setProjectItems([]);
+      setProjectRegisteredCost(null);
+      setProjectCostsLoading(false);
+      setProjectCostsError(false);
       setComparePool([]);
       showToast(`Pozicionet e projektit nuk u ngarkuan: ${error.message}`, 'error');
       return;
@@ -166,6 +186,29 @@ export function DataPage() {
     setComparePool(items);
     setCompareA('');
     setCompareB('');
+    if (items.length === 0) {
+      setProjectRegisteredCost(0);
+      setProjectCostsLoading(false);
+      return;
+    }
+
+    const { data: expenses, error: expensesError } = await supabase
+      .from('item_expenses')
+      .select('project_item_id, total_cost')
+      .in('project_item_id', items.map((item) => item.id));
+    if (requestId !== detailRequestId.current) return;
+    setProjectCostsLoading(false);
+    if (expensesError) {
+      showToast(`Kostot e projektit nuk u ngarkuan: ${expensesError.message}`, 'error');
+      setProjectRegisteredCost(null);
+      setProjectCostsError(true);
+      return;
+    }
+    setProjectRegisteredCost(
+      expenses && expenses.length > 0
+        ? expenses.reduce((sum, expense) => sum + (Number(expense.total_cost) || 0), 0)
+        : null
+    );
   };
 
   const loadCategoryDetails = async (category: DbCategory) => {
@@ -174,6 +217,9 @@ export function DataPage() {
     if (selectedCategory?.id === category.id) {
       setSelectedCategory(null);
       setCategoryItems([]);
+      setProjectRegisteredCost(null);
+      setProjectCostsLoading(false);
+      setProjectCostsError(false);
       setSelectedItemId(null);
       setComparePool([]);
       return;
@@ -181,6 +227,9 @@ export function DataPage() {
     setSelectedCategory(category);
     setSelectedProject(null);
     setProjectItems([]);
+    setProjectRegisteredCost(null);
+    setProjectCostsLoading(false);
+    setProjectCostsError(false);
     setCategoryItems([]);
     setComparePool([]);
     setItemSearchTerm('');
@@ -208,21 +257,39 @@ export function DataPage() {
   };
 
   const saveProjectMeta = async () => {
-    if (!selectedProject) return;
-    const { error } = await updateProject(selectedProject.id, {
-      client: metaClient.trim() || null,
-      status: metaStatus,
-      description: metaDescription.trim() || null,
-      actual_total_cost: metaActualCost.trim() === '' ? null : Number(metaActualCost),
-      actual_notes: metaActualNotes.trim() || null,
-    });
-    if (error) {
-      showToast(error, 'error');
+    if (!selectedProject || projectMetaSaving) return;
+    const actualCost = metaActualCost.trim() === '' ? null : Number(metaActualCost);
+    if (actualCost !== null && (!Number.isFinite(actualCost) || actualCost < 0)) {
+      showToast('Kostoja reale finale duhet të jetë numër zero ose më i madh.', 'error');
       return;
     }
-    showToast('Projekti u përditësua.', 'success');
-    await reloadProjects();
-    setAnalysisRefreshKey((key) => key + 1);
+    setProjectMetaSaving(true);
+    try {
+      const patch = {
+        client: metaClient.trim() || null,
+        status: metaStatus,
+        description: metaDescription.trim() || null,
+        actual_total_cost: actualCost,
+        actual_notes: metaActualNotes.trim() || null,
+      };
+      const { error } = await updateProject(selectedProject.id, patch);
+      if (error) {
+        showToast(error, 'error');
+        return;
+      }
+      const projectId = selectedProject.id;
+      setSelectedProject((current) => current?.id === projectId
+        ? { ...current, ...patch }
+        : current);
+      const refreshedProjects = await reloadProjects();
+      const refreshedProject = refreshedProjects?.find((project) => project.id === projectId);
+      if (refreshedProject) setSelectedProject(refreshedProject);
+      setAnalysisRefreshKey((key) => key + 1);
+      showSavedToast('Projekti u përditësua dhe të dhënat u rifreskuan.');
+      if (!refreshedProject) showToast('Pamja përmbledhëse nuk u rifreskua e plotë.', 'info');
+    } finally {
+      setProjectMetaSaving(false);
+    }
   };
 
   const handleDeleteProject = async () => {
@@ -442,14 +509,14 @@ export function DataPage() {
 
     setEditingId(null);
     setOriginalEditForm(null);
-    showToast('Pozicioni u përditësua.', 'success');
-    if (priceHistoryResult.error) {
-      showToast(`Pozicioni u përditësua, por historiku i çmimeve jo: ${priceHistoryResult.error}`, 'error');
-    }
     if (selectedProject) await loadProjectDetails(selectedProject);
     if (selectedCategory) await loadCategoryDetails(selectedCategory);
     await reloadProjects();
     setAnalysisRefreshKey((key) => key + 1);
+    showSavedToast('Pozicioni u përditësua dhe të dhënat u rifreskuan.');
+    if (priceHistoryResult.error) {
+      showToast(`Pozicioni u përditësua, por historiku i çmimeve jo: ${priceHistoryResult.error}`, 'error');
+    }
   };
 
   const handleExport = async () => {
@@ -469,6 +536,28 @@ export function DataPage() {
     () => (selectedCategory ? groupItemsByProject(categoryItems) : []),
     [selectedCategory, categoryItems]
   );
+  const selectedProjectFinancials = useMemo(() => {
+    const offerWithVat = projectItems.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
+    const offerWithoutVat = projectItems.reduce((sum, item) => {
+      const gross = Number(item.total_price) || 0;
+      return sum + netAmountFromGross(gross, Number(item.vat_percent ?? 18));
+    }, 0);
+    const vat = offerWithVat - offerWithoutVat;
+    const expectedProfit = projectRegisteredCost == null ? null : offerWithoutVat - projectRegisteredCost;
+    const expectedProfitPercent = projectRegisteredCost != null && projectRegisteredCost > 0 && expectedProfit != null
+      ? (expectedProfit / projectRegisteredCost) * 100
+      : null;
+    const enteredActualCost = metaActualCost.trim() === '' ? null : Number(metaActualCost);
+    const actualProfitPreview = enteredActualCost != null &&
+      Number.isFinite(enteredActualCost) &&
+      enteredActualCost >= 0
+      ? offerWithoutVat - enteredActualCost
+      : null;
+    const actualProfitPercent = enteredActualCost != null && enteredActualCost > 0 && actualProfitPreview != null
+      ? (actualProfitPreview / enteredActualCost) * 100
+      : null;
+    return { offerWithVat, offerWithoutVat, vat, expectedProfit, expectedProfitPercent, actualProfitPreview, actualProfitPercent };
+  }, [metaActualCost, projectItems, projectRegisteredCost]);
   const visibleCategories = useMemo(() => uniqueCategories(categoriesList), [categoriesList]);
 
   const filterProjectItems = projectItems.filter(
@@ -614,6 +703,66 @@ export function DataPage() {
           </header>
 
           <div className="project-meta-panel">
+            <section className="project-financial-summary" aria-label="Përmbledhja financiare e projektit">
+              <div className="project-financial-heading">
+                <div>
+                  <strong>Përmbledhja financiare</strong>
+                  <p>Shifrat e ofertës të ndihmojnë ta krahasosh koston reale që do ta regjistrosh.</p>
+                </div>
+                <span>{projectItems.length} pozicione</span>
+              </div>
+              <div className="project-financial-grid">
+                <div>
+                  <span>Oferta pa TVSH</span>
+                  <strong>{formatProjectMoney(selectedProjectFinancials.offerWithoutVat)}</strong>
+                </div>
+                <div>
+                  <span>TVSH</span>
+                  <strong>{formatProjectMoney(selectedProjectFinancials.vat)}</strong>
+                </div>
+                <div>
+                  <span>Oferta me TVSH</span>
+                  <strong>{formatProjectMoney(selectedProjectFinancials.offerWithVat)}</strong>
+                </div>
+                <div>
+                  <span>Kosto e parashikuar e regjistruar</span>
+                  <strong>
+                    {projectCostsLoading
+                      ? 'Duke ngarkuar…'
+                      : projectCostsError
+                        ? 'Nuk u ngarkuan'
+                        : projectRegisteredCost == null
+                        ? 'Pa kosto të regjistruara'
+                        : formatProjectMoney(projectRegisteredCost)}
+                  </strong>
+                </div>
+                <div>
+                  <span>Fitimi i pritshëm nga kostot e regjistruara</span>
+                  <strong className={
+                    selectedProjectFinancials.expectedProfit == null
+                      ? ''
+                      : selectedProjectFinancials.expectedProfit >= 0
+                        ? 'diff-up'
+                        : 'diff-down'
+                  }>
+                    {projectCostsLoading
+                      ? 'Duke llogaritur…'
+                      : projectCostsError
+                        ? '—'
+                      : selectedProjectFinancials.expectedProfit == null
+                        ? '—'
+                        : formatProjectMoney(selectedProjectFinancials.expectedProfit)}
+                  </strong>
+                  {selectedProjectFinancials.expectedProfit != null && (
+                    <small>
+                      {selectedProjectFinancials.expectedProfitPercent == null
+                        ? '—'
+                        : `${selectedProjectFinancials.expectedProfitPercent.toFixed(1)}%`}
+                    </small>
+                  )}
+                </div>
+              </div>
+            </section>
             <div className="project-meta-grid">
               <label>
                 Klienti
@@ -633,7 +782,10 @@ export function DataPage() {
               </label>
               <div className="project-meta-field project-actual-cost">
                 <label htmlFor="project-actual-cost">Kosto reale finale (€)</label>
-                <p>Plotësoje kur projekti përfundon. Përdoret në raportin e fitimit real.</p>
+                <p>
+                  Plotësoje pas përfundimit me shumën e shpenzuar realisht. Mos shkruaj këtu çmimin e ofertës
+                  ({formatProjectMoney(selectedProjectFinancials.offerWithVat)}); përdor faturat dhe shpenzimet faktike.
+                </p>
                 <input
                   id="project-actual-cost"
                   type="number"
@@ -641,8 +793,22 @@ export function DataPage() {
                   step="0.01"
                   value={metaActualCost}
                   onChange={(e) => setMetaActualCost(e.target.value)}
-                  placeholder="p.sh. 13 000"
+                  placeholder="Shuma totale e shpenzuar"
                 />
+                {selectedProjectFinancials.actualProfitPreview != null && (
+                  <p className="project-actual-profit-preview">
+                    Fitimi sipas kësaj kostoje reale:
+                    <strong className={selectedProjectFinancials.actualProfitPreview >= 0 ? 'diff-up' : 'diff-down'}>
+                      {formatProjectMoney(selectedProjectFinancials.actualProfitPreview)}
+                    </strong>
+                    {selectedProjectFinancials.actualProfitPercent != null && (
+                      <strong className={selectedProjectFinancials.actualProfitPreview >= 0 ? 'diff-up' : 'diff-down'}>
+                        {selectedProjectFinancials.actualProfitPercent.toFixed(1)}%
+                      </strong>
+                    )}
+                    <span>Ruaji ndryshimet për ta përditësuar raportin.</span>
+                  </p>
+                )}
                 <button
                   type="button"
                   className="project-report-link"
@@ -657,8 +823,8 @@ export function DataPage() {
               </label>
             </div>
             <div className="project-meta-actions">
-              <button type="button" className="primary-button" onClick={saveProjectMeta}>
-                <Save size={16} /> Ruaj ndryshimet
+              <button type="button" className="primary-button" onClick={saveProjectMeta} disabled={projectMetaSaving}>
+                <Save size={16} /> {projectMetaSaving ? 'Duke ruajtur…' : 'Ruaj ndryshimet'}
               </button>
               <button type="button" className="card" onClick={analyzeSelectedProject}>
                 <ClipboardCheck size={16} /> Analizo projektin
@@ -731,7 +897,7 @@ export function DataPage() {
         </section>
       )}
 
-      <PriceHistoryDashboard categories={categoriesList} refreshKey={analysisRefreshKey} />
+      <PriceHistoryDashboard refreshKey={analysisRefreshKey} />
 
       <section className="panel panel-top-gap revenue-trend-panel">
         <div className="revenue-trend-panel-header">

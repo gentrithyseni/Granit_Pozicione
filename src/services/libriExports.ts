@@ -20,6 +20,7 @@ export type LibriExportRecord = {
   totalValue: number;
   meta: ParamasaPreviewMeta;
   pageLayout: StoredLibriExportPlanPage[] | null;
+  manualPageLayout: StoredLibriExportPlanPage[] | null;
   rows: ParsedRow[];
   createdAt: string;
 };
@@ -42,9 +43,10 @@ export type LibriDashboardSummary = {
 };
 
 function mapRecord(row: DbLibriExport): LibriExportRecord {
-  const { __libriPageLayout, ...meta } = row.meta || {};
+  const { __libriPageLayout, __libriManualPageLayout, ...meta } = row.meta || {};
   const rows = row.rows as unknown as ParsedRow[];
   const restoredPlan = restoreLibriExportPlan(__libriPageLayout, rows);
+  const restoredManualPlan = restoreLibriExportPlan(__libriManualPageLayout, rows) ?? restoredPlan;
   return {
     id: row.id,
     fileName: row.file_name,
@@ -52,6 +54,7 @@ function mapRecord(row: DbLibriExport): LibriExportRecord {
     totalValue: Number(row.total_value) || 0,
     meta: meta as unknown as ParamasaPreviewMeta,
     pageLayout: restoredPlan ? serializeLibriExportPlan(restoredPlan, rows) : null,
+    manualPageLayout: restoredManualPlan ? serializeLibriExportPlan(restoredManualPlan, rows) : null,
     rows,
     createdAt: row.created_at,
   };
@@ -96,10 +99,15 @@ export async function saveLibriExportRecord(fileName: string, rows: ParsedRow[],
 export async function saveLibriExportPageLayout(
   id: string,
   meta: ParamasaPreviewMeta,
-  pageLayout: StoredLibriExportPlanPage[] | null
+  pageLayout: StoredLibriExportPlanPage[] | null,
+  manualPageLayout: StoredLibriExportPlanPage[] | null = pageLayout
 ): Promise<void> {
   if (!supabase) throw new Error('Supabase nuk është i lidhur.');
-  const storedMeta = pageLayout ? { ...meta, __libriPageLayout: pageLayout } : meta;
+  const storedMeta = {
+    ...meta,
+    __libriPageLayout: pageLayout,
+    __libriManualPageLayout: manualPageLayout,
+  };
   const { data, error } = await supabase
     .from('libri_exports')
     .update({ meta: storedMeta })

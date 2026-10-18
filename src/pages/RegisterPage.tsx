@@ -39,7 +39,7 @@ export function RegisterPage() {
   const [categories, setCategories] = useState<DbCategory[]>([]);
   const [loading, setLoading] = useState(false);
   const [savedResult, setSavedResult] = useState<{ unit: string; qty: number; price: number; total: number } | null>(null);
-  const { showToast } = useToast();
+  const { showToast, showSavedToast } = useToast();
   const [targetTotal, setTargetTotal] = useState('');
   const [mode, setMode] = useState<'proportional' | 'labor-first' | 'material-first'>('proportional');
   const [weight, setWeight] = useState(0.7);
@@ -180,7 +180,7 @@ export function RegisterPage() {
       const cats = await ensureDefaultCategories();
       setCategories(cats);
       reset({ ...values, description: '', newProjectName: '', newCategoryName: '' });
-      showToast('Rreshti u ruajt me sukses.', 'success');
+      showSavedToast('Rreshti u ruajt me sukses.');
       if (result.priceHistoryError) {
         showToast(`Pozicioni u ruajt, por historiku i çmimeve jo: ${result.priceHistoryError}`, 'error');
       }

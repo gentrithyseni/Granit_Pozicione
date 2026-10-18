@@ -1,52 +1,44 @@
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CircleDollarSign } from 'lucide-react';
-import type { DbCategory } from '../types/database';
-import { fetchPriceTrend, fetchProfitSummaryByProject, type PriceTrendPoint, type ProfitSummary } from '../services/priceHistory';
-import { categoryNameKey, uniqueCategories } from '../services/categories';
+import { BarChart3, ChevronLeft, ChevronRight, CircleDollarSign } from 'lucide-react';
+import { fetchProfitSummaryByProject, type ProfitSummary } from '../services/priceHistory';
 
 type Props = {
-  categories: DbCategory[];
   refreshKey?: number;
 };
 
-/** Dashboard analize: (1) si ndryshon çmimi i një kategorie me kohë, (2) fitimi i planifikuar
- * (çmimi i ofertuar minus koston e regjistruar) sipas projektit. Të dhënat vijnë nga
- * price_history (snapshot çdo herë që regjistrohet/redaktohet një pozicion) dhe item_expenses. */
-export function PriceHistoryDashboard({ categories, refreshKey = 0 }: Props) {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [trend, setTrend] = useState<PriceTrendPoint[]>([]);
+const COST_TYPES = [
+  { key: 'materialCost', label: 'Material', color: 'cost-material' },
+  { key: 'laborCost', label: 'Punë', color: 'cost-labor' },
+  { key: 'foodCost', label: 'Ushqim', color: 'cost-food' },
+  { key: 'transportCost', label: 'Transport', color: 'cost-transport' },
+  { key: 'otherCost', label: 'Të tjera', color: 'cost-other' },
+] as const;
+
+type CostKey = (typeof COST_TYPES)[number]['key'];
+
+const formatMoney = (value: number) => `${value.toLocaleString('sq-AL', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})} €`;
+
+/** Përmbledh strukturën e kostove dhe fitimin e pritshëm për projektet e regjistruara. */
+export function PriceHistoryDashboard({ refreshKey = 0 }: Props) {
   const [profitSummary, setProfitSummary] = useState<ProfitSummary[]>([]);
-  const [profitSummaryError, setProfitSummaryError] = useState<string | null>(null);
-  const [trendError, setTrendError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const displayCategories = uniqueCategories(categories);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedCostProjectId, setSelectedCostProjectId] = useState('');
+  const [profitProjectIndex, setProfitProjectIndex] = useState(0);
 
   useEffect(() => {
-    setProfitSummaryError(null);
-    fetchProfitSummaryByProject()
-      .then(setProfitSummary)
-      .catch((error: unknown) => setProfitSummaryError(error instanceof Error ? error.message : 'Analiza e fitimit dështoi.'));
-  }, [refreshKey]);
-
-  useEffect(() => {
-    if (!selectedCategoryId) {
-      setTrend([]);
-      setTrendError(null);
-      return;
-    }
     let active = true;
     setLoading(true);
-    setTrendError(null);
-    const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
-    const matchingCategoryIds = selectedCategory
-      ? categories.filter((category) => categoryNameKey(category.name) === categoryNameKey(selectedCategory.name)).map((category) => category.id)
-      : [selectedCategoryId];
-    fetchPriceTrend(matchingCategoryIds)
-      .then((data) => {
-        if (active) setTrend(data);
+    setError(null);
+    fetchProfitSummaryByProject()
+      .then((summary) => {
+        if (active) setProfitSummary(summary);
       })
-      .catch((error: unknown) => {
-        if (active) setTrendError(error instanceof Error ? error.message : 'Historiku i çmimeve dështoi.');
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : 'Analiza financiare dështoi.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -54,101 +46,206 @@ export function PriceHistoryDashboard({ categories, refreshKey = 0 }: Props) {
     return () => {
       active = false;
     };
-  }, [categories, selectedCategoryId]);
+  }, [refreshKey]);
 
-  const topProfitProjects = [...profitSummary].sort((a, b) => b.profitPercentAchieved - a.profitPercentAchieved).slice(0, 8);
-  const selectedCategoryName = displayCategories.find((category) => category.id === selectedCategoryId)?.name || '';
-  const trendStats = useMemo(() => {
-    if (trend.length === 0) return null;
-    const first = trend[0].unitPrice;
-    const latest = trend[trend.length - 1].unitPrice;
-    const min = Math.min(...trend.map((point) => point.unitPrice));
-    const max = Math.max(...trend.map((point) => point.unitPrice));
-    const change = first > 0 ? ((latest - first) / first) * 100 : 0;
-    return { first, latest, min, max, change };
-  }, [trend]);
-  const maxProfit = Math.max(...topProfitProjects.map((project) => Math.abs(project.profitPercentAchieved)), 1);
+  const costTotals = useMemo(() => profitSummary.reduce<Record<CostKey, number>>((totals, project) => {
+    COST_TYPES.forEach(({ key }) => {
+      totals[key] += project[key];
+    });
+    return totals;
+  }, {
+    materialCost: 0,
+    laborCost: 0,
+    foodCost: 0,
+    transportCost: 0,
+    otherCost: 0,
+  }), [profitSummary]);
+
+  const selectedProject = profitSummary.find((project) => project.projectId === selectedCostProjectId);
+  const displayedCosts = selectedProject
+    ? COST_TYPES.map((type) => ({ ...type, value: selectedProject[type.key] }))
+    : COST_TYPES.map((type) => ({ ...type, value: costTotals[type.key] }));
+  const displayedCostTotal = displayedCosts.reduce((sum, item) => sum + item.value, 0);
+  const knownCostProjects = profitSummary.filter((project) => project.hasCostData);
+  const totalNet = profitSummary.reduce((sum, project) => sum + project.plannedTotal, 0);
+  const totalVat = profitSummary.reduce((sum, project) => sum + project.vatAmount, 0);
+  const totalGross = profitSummary.reduce((sum, project) => sum + project.totalWithVat, 0);
+  const totalRegisteredCost = Object.values(costTotals).reduce((sum, value) => sum + value, 0);
+  const totalExpectedProfit = knownCostProjects.reduce(
+    (sum, project) => sum + (project.profitAmount ?? 0),
+    0
+  );
+  const profitProjects = profitSummary;
+  useEffect(() => {
+    setProfitProjectIndex((index) => Math.min(index, Math.max(0, profitProjects.length - 1)));
+  }, [profitProjects.length]);
+  const displayedProfitProject = profitProjects[profitProjectIndex] ?? null;
 
   return (
     <div id="price-analysis" className="panel panel-top-gap">
       <div className="price-history-heading">
         <div>
-          <h3 className="panel-heading-accent"><BarChart3 size={17} className="panel-heading-icon" /> Analiza e çmimeve</h3>
-          <p className="muted">Fitimi llogaritet nga vlera pa TVSH kundrejt kostove dhe shprehet si përqindje mbi koston.</p>
+          <h3 className="panel-heading-accent"><BarChart3 size={17} className="panel-heading-icon" /> Analiza financiare</h3>
+          <p className="muted">Kostot e regjistruara krahasohen me vlerën e ofertës pa TVSH; TVSH-ja paraqitet veçmas.</p>
         </div>
         <span className="price-history-purpose">Për vendimmarrje</span>
       </div>
 
-      <div className="price-history-grid">
-        <div className="price-history-chart-box">
-          <div className="price-history-box-head">
-            <div><span className="price-history-kicker">Historiku</span><h4 className="price-history-subheading">Ndryshimi i çmimit</h4></div>
-            <label className="price-history-select-label">Kategoria
-              <select value={selectedCategoryId} onChange={(e) => setSelectedCategoryId(e.target.value)}>
-                <option value="">-- Zgjidh kategorinë --</option>
-                {displayCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </select>
-            </label>
-          </div>
+      {error && <p className="field-error">{error}</p>}
+      {loading && <p className="muted field-hint">Duke ngarkuar analizën financiare…</p>}
+      {!loading && !error && profitSummary.length === 0 && (
+        <p className="muted field-hint">Ende nuk ka projekte me pozicione për analizë.</p>
+      )}
 
-          {!selectedCategoryId && <p className="muted field-hint">Zgjidh një kategori për të parë trendin e çmimit.</p>}
-          {selectedCategoryId && loading && <p className="muted field-hint">Duke ngarkuar...</p>}
-          {selectedCategoryId && trendError && <p className="field-error">{trendError}</p>}
-          {selectedCategoryId && !loading && trend.length === 0 && (
-            <p className="muted field-hint">Ende s'ka histori çmimesh për këtë kategori (regjistro ose redakto një pozicion për të filluar).</p>
-          )}
-          {selectedCategoryId && !loading && trendStats && (
-            <>
-              <div className="price-history-kpis">
-                <div><span>Çmimi i fundit</span><strong>{trendStats.latest.toFixed(2)}€</strong><small>{selectedCategoryName}</small></div>
-                <div><span>Ndryshimi</span><strong className={trendStats.change >= 0 ? 'diff-up' : 'diff-down'}>{trendStats.change >= 0 ? '+' : ''}{trendStats.change.toFixed(1)}%</strong><small>nga regjistrimi i parë</small></div>
-                <div><span>Intervali</span><strong>{trendStats.min.toFixed(2)}€ - {trendStats.max.toFixed(2)}€</strong><small>{trend.length} regjistrime</small></div>
+      {!loading && !error && profitSummary.length > 0 && (
+        <div className="price-history-grid">
+          <section className="price-history-chart-box" aria-labelledby="cost-structure-title">
+            <div className="price-history-box-head">
+              <div>
+                <span className="price-history-kicker">Kostot</span>
+                <h4 id="cost-structure-title" className="price-history-subheading">Struktura e kostove</h4>
               </div>
-              <div className="price-history-timeline">
-                {trend.slice(-8).map((point, index, points) => {
-                  const range = trendStats.max - trendStats.min || 1;
-                  const width = 18 + ((point.unitPrice - trendStats.min) / range) * 82;
-                  const isLatest = index === points.length - 1;
-                  return <div className={`price-history-timeline-row ${isLatest ? 'latest' : ''}`} key={`${point.recordedAt}-${index}`}>
-                    <span>{new Date(point.recordedAt).toLocaleDateString('sq-AL', { day: '2-digit', month: '2-digit' })}</span>
-                    <div className="price-history-track"><i style={{ width: `${width}%` }} /></div>
-                    <strong>{point.unitPrice.toFixed(2)}€</strong>
-                  </div>;
-                })}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="price-history-chart-box">
-          <div className="price-history-box-head">
-            <div><span className="price-history-kicker">Krahasimi</span><h4 className="price-history-subheading">Rezultati sipas projektit</h4></div>
-            <CircleDollarSign size={20} className="price-history-box-icon" />
-          </div>
-          {profitSummaryError && <p className="field-error">{profitSummaryError}</p>}
-          {!profitSummaryError && topProfitProjects.length === 0 && <p className="muted field-hint">Ende s'ka të dhëna të mjaftueshme (regjistro pozicione me kosto materiali/pune).</p>}
-          {topProfitProjects.length > 0 && (
-            <>
-              <div className="profit-summary-strip"><div><span>Projektet</span><strong>{profitSummary.length}</strong></div><div><span>Më i larti</span><strong>{topProfitProjects[0].profitPercentAchieved}%</strong></div><div><span>Fitim real</span><strong>{topProfitProjects.filter((project) => project.realProfitPercent != null).length}</strong></div></div>
-              <div className="price-history-table">
-                {topProfitProjects.map((p) => {
-                  const positive = p.profitPercentAchieved >= 0;
-                  return <div key={p.projectId} className="price-history-row-group">
-                    <div className="price-history-row">
-                      <span className="price-history-project-name">{p.projectName}</span>
-                      <div className="profit-bar-track"><i className={positive ? 'profit-bar-positive' : 'profit-bar-negative'} style={{ width: `${Math.min((Math.abs(p.profitPercentAchieved) / maxProfit) * 100, 100)}%` }} /></div>
-                      <strong className={positive ? 'diff-up' : 'diff-down'}>{p.profitPercentAchieved}%</strong>
+              <label className="price-history-select-label">
+                Shfaq sipas
+                <select value={selectedCostProjectId} onChange={(event) => setSelectedCostProjectId(event.target.value)}>
+                  <option value="">Të gjitha projektet</option>
+                  {profitSummary.map((project) => (
+                    <option key={project.projectId} value={project.projectId}>{project.projectName}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p className="muted field-hint">
+              {selectedProject
+                ? `Ndarja e kostove të projektit “${selectedProject.projectName}”.`
+                : 'Përmbledhje e kostove të regjistruara në të gjitha projektet.'}
+            </p>
+            {displayedCostTotal <= 0 ? (
+              <p className="muted field-hint">Nuk ka kosto të regjistruara për këtë përzgjedhje.</p>
+            ) : (
+              <>
+                <div className="cost-structure-bar" role="img" aria-label="Përbërja e kostove sipas kategorisë">
+                  {displayedCosts.filter((item) => item.value > 0).map((item) => (
+                    <span
+                      key={item.key}
+                      className={item.color}
+                      style={{ width: `${(item.value / displayedCostTotal) * 100}%` }}
+                      title={`${item.label}: ${formatMoney(item.value)}`}
+                    />
+                  ))}
+                </div>
+                <div className="cost-structure-legend">
+                  {displayedCosts.map((item) => (
+                    <div className="cost-structure-row" key={item.key}>
+                      <span className={`cost-structure-dot ${item.color}`} />
+                      <span>{item.label}</span>
+                      <strong>{formatMoney(item.value)}</strong>
+                      <small>{displayedCostTotal > 0 ? `${((item.value / displayedCostTotal) * 100).toFixed(1)}%` : '0.0%'}</small>
                     </div>
-                    {p.actualCost != null && (
-                      <div className="price-history-row price-history-row-real"><span className="muted">Kosto reale: {p.actualCost}€</span><span className="muted">Vlerësimi: {p.estimateErrorPercent}%</span><strong>{p.realProfitPercent}% real</strong></div>
-                    )}
-                  </div>;
-                })}
+                  ))}
+                </div>
+                <div className="cost-structure-total">
+                  <span>Kosto e regjistruar</span>
+                  <strong>{formatMoney(displayedCostTotal)}</strong>
+                </div>
+              </>
+            )}
+            <p className="muted field-hint">
+              Kostot mblidhen nga pozicionet: material, punë, ushqim, transport dhe të tjera.
+            </p>
+          </section>
+
+          <section className="price-history-chart-box" aria-labelledby="project-profit-title">
+            <div className="price-history-box-head">
+              <div>
+                <span className="price-history-kicker">Projektet</span>
+                <h4 id="project-profit-title" className="price-history-subheading">Fitimi i pritshëm</h4>
               </div>
-            </>
-          )}
+              <CircleDollarSign size={20} className="price-history-box-icon" />
+            </div>
+            <div className="profit-summary-strip">
+              <div><span>Vlera pa TVSH</span><strong>{formatMoney(totalNet)}</strong></div>
+              <div><span>TVSH</span><strong>{formatMoney(totalVat)}</strong></div>
+              <div><span>Çmimi përfundimtar</span><strong>{formatMoney(totalGross)}</strong></div>
+            </div>
+            <div className="profit-summary-strip profit-summary-strip-bottom">
+              <div><span>Kosto e regjistruar</span><strong>{formatMoney(totalRegisteredCost)}</strong></div>
+              <div><span>Fitimi i pritshëm*</span><strong className={totalExpectedProfit >= 0 ? 'diff-up' : 'diff-down'}>{formatMoney(totalExpectedProfit)}</strong></div>
+              <div><span>Projekte me kosto</span><strong>{knownCostProjects.length} / {profitSummary.length}</strong></div>
+            </div>
+            {displayedProfitProject && (
+              <>
+                <article className="profit-project-card" aria-live="polite">
+                  <h5>{displayedProfitProject.projectName}</h5>
+                  <div><span>Pa TVSH</span><strong>{formatMoney(displayedProfitProject.plannedTotal)}</strong></div>
+                  <div><span>TVSH</span><strong>{formatMoney(displayedProfitProject.vatAmount)}</strong></div>
+                  <div><span>Çmimi përfundimtar</span><strong>{formatMoney(displayedProfitProject.totalWithVat)}</strong></div>
+                  <div>
+                    <span>Kosto {displayedProfitProject.hasCostData ? '' : '(e paplotë)'}</span>
+                    <strong>
+                      {displayedProfitProject.hasCostData
+                        ? formatMoney(displayedProfitProject.plannedCost)
+                        : displayedProfitProject.hasAnyCostData
+                          ? `${formatMoney(displayedProfitProject.plannedCost)} · ${displayedProfitProject.itemsWithCost}/${displayedProfitProject.itemCount} pozicione`
+                          : 'Pa të dhëna'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Fitimi i pritshëm*</span>
+                    <strong className={
+                      displayedProfitProject.profitAmount == null
+                        ? ''
+                        : displayedProfitProject.profitAmount >= 0
+                          ? 'diff-up'
+                          : 'diff-down'
+                    }>
+                      {displayedProfitProject.profitAmount == null
+                        ? '—'
+                        : formatMoney(displayedProfitProject.profitAmount)}
+                    </strong>
+                  </div>
+                  {displayedProfitProject.actualCost != null && (
+                    <div>
+                      <span>Fitimi sipas kostos reale</span>
+                      <strong>
+                        {displayedProfitProject.realProfitAmount == null
+                          ? '—'
+                          : formatMoney(displayedProfitProject.realProfitAmount)}
+                      </strong>
+                    </div>
+                  )}
+                </article>
+                <nav className="profit-project-pagination" aria-label="Projektet e fitimit të pritshëm">
+                  <button
+                    type="button"
+                    className="card"
+                    onClick={() => setProfitProjectIndex((index) => Math.max(0, index - 1))}
+                    disabled={profitProjectIndex === 0}
+                    aria-label="Projekti i mëparshëm"
+                  >
+                    <ChevronLeft size={16} />
+                    Mëparshmi
+                  </button>
+                  <span>{profitProjectIndex + 1} / {profitProjects.length}</span>
+                  <button
+                    type="button"
+                    className="card"
+                    onClick={() => setProfitProjectIndex((index) => Math.min(profitProjects.length - 1, index + 1))}
+                    disabled={profitProjectIndex >= profitProjects.length - 1}
+                    aria-label="Projekti tjetër"
+                  >
+                    Tjetri
+                    <ChevronRight size={16} />
+                  </button>
+                </nav>
+              </>
+            )}
+            <p className="muted field-hint">
+              * Fitimi i pritshëm = vlera pa TVSH − kostot e regjistruara për të gjitha pozicionet. Për kosto të paplota ose të paregjistruara, fitimi nuk llogaritet.
+            </p>
+          </section>
         </div>
-      </div>
+      )}
     </div>
   );
 }

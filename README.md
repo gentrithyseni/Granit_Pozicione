@@ -17,7 +17,7 @@ Graniti Web është një aplikacion për vlerësimin e ofertave dhe menaxhimin e
 
 - Regjistron pozicione dhe llogarit materialin, punën, ushqimin, transportin, shpenzimet tjera, fitimin dhe TVSH-në.
 - Menaxhon projekte, kategori, statuset dhe pozicionet; ofron krahasim dhe analizë të të dhënave.
-- Paraqet përmbledhje statistikore, trend mujor të ofertave dhe historik të çmimeve.
+- Paraqet përmbledhje statistikore, trend mujor të ofertave, strukturën e kostove sipas projektit dhe fitimin e pritshëm me vlerat pa TVSH, TVSH-në dhe çmimin përfundimtar.
 - Kërkon pozicione sipas përshkrimit, numrit, projektit ose kategorisë.
 - Eksporton të dhëna të projektit në CSV dhe backup të të dhënave në JSON.
 

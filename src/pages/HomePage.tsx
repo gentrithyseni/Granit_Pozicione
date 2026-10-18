@@ -23,9 +23,9 @@ function greetingForHour(hour: number): string {
 }
 
 export function HomePage() {
-  const [stats, setStats] = useState({ projects: 0, categories: 0, items: 0 });
+  const [stats, setStats] = useState<{ projects: number; categories: number; items: number } | null>(null);
   const [references, setReferences] = useState<DbProject[]>([]);
-  const [totalValue, setTotalValue] = useState(0);
+  const [totalValue, setTotalValue] = useState<number | null>(null);
   const [projectSummaries, setProjectSummaries] = useState<ProjectSummary[]>([]);
   const [categorySummaries, setCategorySummaries] = useState<CategorySummary[]>([]);
   const [cityUsage, setCityUsage] = useState<CityUsageSummary[]>([]);
@@ -35,20 +35,33 @@ export function HomePage() {
   const [libriSummary, setLibriSummary] = useState(() => summarizeLibriExportRecords([]));
   const [recentActionId, setRecentActionId] = useState<string | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
     const reportError = (error: unknown) => {
-      setDashboardError(error instanceof Error ? error.message : 'Disa të dhëna të ballinës nuk u ngarkuan.');
+      if (active) setDashboardError(error instanceof Error ? error.message : 'Disa të dhëna të ballinës nuk u ngarkuan.');
     };
-    fetchDashboardStats().then(setStats);
-    fetchCompletedProjects().then(setReferences).catch(reportError);
-    fetchTotalSystemValue().then(setTotalValue).catch(reportError);
-    fetchLibriExportRecords().then((records) => {
-      setRecentParamasa(records[0] ?? null);
-      setLibriSummary(summarizeLibriExportRecords(records));
-    }).catch(reportError);
+    const tasks = [
+      fetchDashboardStats().then((value) => {
+        if (active) setStats(value);
+      }).catch(reportError),
+      fetchCompletedProjects().then((value) => {
+        if (active) setReferences(value);
+      }).catch(reportError),
+      fetchTotalSystemValue().then((value) => {
+        if (active) setTotalValue(value);
+      }).catch(reportError),
+    ];
+    tasks.push(
+      fetchLibriExportRecords().then((records) => {
+        if (!active) return;
+        setRecentParamasa(records[0] ?? null);
+        setLibriSummary(summarizeLibriExportRecords(records));
+      }).catch(reportError)
+    );
 
-    (async () => {
+    tasks.push((async () => {
       if (!supabase) return;
       const [projectsResult, categories] = await Promise.all([
         supabase.from('projects').select('*').order('created_at', { ascending: false }),
@@ -56,11 +69,25 @@ export function HomePage() {
       ]);
       if (projectsResult.error) throw new Error(`Projektet nuk u ngarkuan: ${projectsResult.error.message}`);
       const projects = projectsResult.data;
+      if (!active) return;
       setAllProjects(projects || []);
-      setProjectSummaries(await fetchProjectSummaries(projects || []));
-      setCategorySummaries(await fetchCategorySummaries(categories));
-      setCityUsage(await fetchTransportCityUsage());
-    })().catch(reportError);
+      const [projectData, categoryData, transportData] = await Promise.all([
+        fetchProjectSummaries(projects || []),
+        fetchCategorySummaries(categories),
+        fetchTransportCityUsage(),
+      ]);
+      if (!active) return;
+      setProjectSummaries(projectData);
+      setCategorySummaries(categoryData);
+      setCityUsage(transportData);
+    })().catch(reportError));
+
+    void Promise.all(tasks).finally(() => {
+      if (active) setDashboardLoading(false);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const today = useMemo(
@@ -146,21 +173,21 @@ export function HomePage() {
           </div>
           <div className="home-hero-badge">
             <span className="muted">Vlera e sistemit</span>
-            <strong>{totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</strong>
+            <strong>{dashboardLoading ? '…' : totalValue === null ? '—' : `${totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €`}</strong>
           </div>
         </div>
 
         <div className="home-stat-strip">
           <div className="home-stat">
-            <span className="home-stat-value">{stats.projects}</span>
+            <span className="home-stat-value">{dashboardLoading ? '…' : stats?.projects ?? '—'}</span>
             <span className="home-stat-label">projekte</span>
           </div>
           <div className="home-stat">
-            <span className="home-stat-value">{stats.categories}</span>
+            <span className="home-stat-value">{dashboardLoading ? '…' : stats?.categories ?? '—'}</span>
             <span className="home-stat-label">kategori</span>
           </div>
           <div className="home-stat">
-            <span className="home-stat-value">{stats.items}</span>
+            <span className="home-stat-value">{dashboardLoading ? '…' : stats?.items ?? '—'}</span>
             <span className="home-stat-label">pozicione</span>
           </div>
         </div>
@@ -226,7 +253,7 @@ export function HomePage() {
         ) : (
           <>
             <h3>Paramasa e fundit</h3>
-            <p className="muted">Nuk ka paramasë të shkarkuar ende.</p>
+            <p className="muted">{dashboardLoading ? 'Duke ngarkuar historikun…' : 'Nuk ka paramasë të shkarkuar ende.'}</p>
           </>
         )}
       </section>
@@ -249,7 +276,7 @@ export function HomePage() {
                   >
                     <div className="project-status-head">
                       <StatusBadge status={status.value} />
-                      <strong>{status.count}</strong>
+                      <strong>{dashboardLoading ? '…' : status.count}</strong>
                     </div>
                     <div className="project-status-description">{status.label}</div>
                     <div className="project-status-mini-bar" aria-hidden="true">
@@ -319,7 +346,7 @@ export function HomePage() {
             {projectSummaries.length > 0 || categorySummaries.length > 0 ? (
               <InsightsCharts projectSummaries={projectSummaries} categorySummaries={categorySummaries} cityUsage={cityUsage} />
             ) : (
-              <p className="muted chart-empty">Duke ngarkuar statistikat…</p>
+              <p className="muted chart-empty">{dashboardLoading ? 'Duke ngarkuar statistikat…' : 'Nuk ka statistika për t’u shfaqur.'}</p>
             )}
           </section>
 
@@ -336,7 +363,7 @@ export function HomePage() {
           </div>
           <div className="libri-summary-pill">
             <span>Vlera totale</span>
-            <strong>{totalLibriValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</strong>
+            <strong>{dashboardLoading ? '…' : `${totalLibriValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €`}</strong>
           </div>
         </div>
 
@@ -346,7 +373,7 @@ export function HomePage() {
               <span className="admin-stat-label">Total libra</span>
               <CheckCircle2 size={16} className="admin-stat-icon success" />
             </div>
-            <div className="admin-stat-value">{libriSummary.totalBooks}</div>
+            <div className="admin-stat-value">{dashboardLoading ? '…' : libriSummary.totalBooks}</div>
             <p className="muted admin-stat-note">libra të regjistruar</p>
           </div>
           <div className="admin-stat-card libri-stat-card highlight">
@@ -354,7 +381,7 @@ export function HomePage() {
               <span className="admin-stat-label">Vlera totale</span>
               <ReceiptText size={16} className="admin-stat-icon success" />
             </div>
-            <div className="admin-stat-value">{totalLibriValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</div>
+            <div className="admin-stat-value">{dashboardLoading ? '…' : `${totalLibriValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €`}</div>
             <p className="muted admin-stat-note">vlerë e gjithë librit</p>
           </div>
           <div className="admin-stat-card libri-stat-card">
@@ -362,7 +389,7 @@ export function HomePage() {
               <span className="admin-stat-label">Vlerë mesatare</span>
               <TrendingUp size={16} className="admin-stat-icon primary" />
             </div>
-            <div className="admin-stat-value">{averageBookValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €</div>
+            <div className="admin-stat-value">{dashboardLoading ? '…' : `${averageBookValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €`}</div>
             <p className="muted admin-stat-note">për libër</p>
           </div>
           <div className="admin-stat-card libri-stat-card">
@@ -370,8 +397,8 @@ export function HomePage() {
               <span className="admin-stat-label">Libri më i vlerësuar</span>
               <PieChart size={16} className="admin-stat-icon primary" />
             </div>
-            <div className="admin-stat-value">{topBook ? `${topBook.totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €` : '0 €'}</div>
-            <p className="muted admin-stat-note">{topBook ? topBook.fileName : 'Nuk ka të dhëna'}</p>
+            <div className="admin-stat-value">{dashboardLoading ? '…' : topBook ? `${topBook.totalValue.toLocaleString('sq-AL', { maximumFractionDigits: 0 })} €` : '0 €'}</div>
+            <p className="muted admin-stat-note">{dashboardLoading ? 'Duke ngarkuar…' : topBook ? topBook.fileName : 'Nuk ka të dhëna'}</p>
           </div>
         </div>
 
@@ -431,7 +458,7 @@ export function HomePage() {
                   </li>
                 ))
               ) : (
-                <li className="muted">Nuk ka libra të regjistruar ende.</li>
+                <li className="muted">{dashboardLoading ? 'Duke ngarkuar librat…' : 'Nuk ka libra të regjistruar ende.'}</li>
               )}
             </ul>
           </div>
@@ -449,9 +476,9 @@ export function HomePage() {
               <span className="admin-stat-label">Exporti i fundit</span>
               <CheckCircle2 size={16} className="admin-stat-icon success" />
             </div>
-            <div className="admin-stat-value">{recentParamasa ? 'Gati' : 'S\'ka'}</div>
+            <div className="admin-stat-value">{dashboardLoading ? '…' : recentParamasa ? 'Gati' : 'S\'ka'}</div>
             <p className="muted admin-stat-note">
-              {recentParamasa ? `${recentPageCount} faqe në librin e fundit` : 'Nuk ka export të kryer'}
+              {dashboardLoading ? 'Duke kontrolluar historikun…' : recentParamasa ? `${recentPageCount} faqe në librin e fundit` : 'Nuk ka export të kryer'}
             </p>
           </div>
           <div className="admin-stat-card">
@@ -459,9 +486,9 @@ export function HomePage() {
               <span className="admin-stat-label">Projektet aktive</span>
               <TrendingUp size={16} className="admin-stat-icon primary" />
             </div>
-            <div className="admin-stat-value">{allProjects.filter((project) => (project.status || 'draft') === 'in_progress').length}</div>
+            <div className="admin-stat-value">{dashboardLoading ? '…' : allProjects.filter((project) => (project.status || 'draft') === 'in_progress').length}</div>
             <p className="muted admin-stat-note">
-              {allProjects.filter((project) => (project.status || 'draft') === 'in_progress').length > 0 ? 'në proces' : 'asnjë në proces'}
+              {dashboardLoading ? 'Duke ngarkuar projektet…' : allProjects.filter((project) => (project.status || 'draft') === 'in_progress').length > 0 ? 'në proces' : 'asnjë në proces'}
             </p>
           </div>
           <div className="admin-stat-card">
@@ -469,7 +496,7 @@ export function HomePage() {
               <span className="admin-stat-label">Pozicione të regjistruara</span>
               <CheckCircle2 size={16} className="admin-stat-icon success" />
             </div>
-            <div className="admin-stat-value">{stats.items}</div>
+            <div className="admin-stat-value">{dashboardLoading ? '…' : stats?.items ?? '—'}</div>
             <p className="muted admin-stat-note">
               në total
             </p>

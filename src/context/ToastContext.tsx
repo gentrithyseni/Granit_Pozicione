@@ -6,6 +6,7 @@ type Toast = { id: number; message: string; type: ToastType; duration?: number }
 
 type ToastContextValue = {
   showToast: (message: string, type?: ToastType, duration?: number) => void;
+  showSavedToast: (message: string, duration?: number) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -23,7 +24,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => dismissToast(id), duration);
   }, [dismissToast]);
 
-  const value = useMemo(() => ({ showToast }), [showToast]);
+  const showSavedToast = useCallback((message: string, duration = 2800) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast(message, 'success', duration);
+  }, [showToast]);
+
+  const value = useMemo(() => ({ showToast, showSavedToast }), [showSavedToast, showToast]);
 
   return (
     <ToastContext.Provider value={value}>

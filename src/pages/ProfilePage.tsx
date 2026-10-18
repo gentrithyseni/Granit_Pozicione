@@ -35,7 +35,7 @@ function formatApplicationDate(value?: string) {
 export function ProfilePage() {
   const { user, profile, isAdmin, changePassword, signOut } = useAuth();
   const navigate = useNavigate();
-  const { showToast } = useToast();
+  const { showToast, showSavedToast } = useToast();
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
@@ -75,8 +75,8 @@ export function ProfilePage() {
     const result = await updateUserApproval(profile.id, status);
     if (result.error) showToast(result.error, 'error');
     else {
-      showToast(`Përdoruesi u ${status === 'approved' ? 'aprovua' : status === 'rejected' ? 'refuzua' : 'pezullua'}.`, 'success');
       await reloadProfiles();
+      showSavedToast(`Përdoruesi u ${status === 'approved' ? 'aprovua' : status === 'rejected' ? 'refuzua' : 'pezullua'}.`);
     }
     setProfileActionId(null);
   };
@@ -117,7 +117,7 @@ export function ProfilePage() {
 
     reset();
     setPasswordSuccess('Password-i u ndryshua me sukses.');
-    showToast('Password-i u ndryshua me sukses.', 'success');
+    showSavedToast('Password-i u ndryshua me sukses.');
   };
 
   return (
