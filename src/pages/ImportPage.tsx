@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, ChevronRight, Download, Eye, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, ChevronLeft, ChevronRight, Download, Eye, FileSpreadsheet, Info, Trash2 } from 'lucide-react';
 import { ParamasaPreview, type ParamasaPreviewMeta, type PageGroupingMode } from '../components/ParamasaPreview';
 import { ManualPageBuilder } from '../components/ManualPageBuilder';
 import { Shell } from '../components/Shell';
 import { useToast } from '../context/ToastContext';
-import { parseExcelWithValidation, type ParsedRow } from '../lib/excel';
+import { parseExcelWithValidation, type ImportDiagnostic, type ParsedRow, type WorkbookMetadataSuggestions } from '../lib/excel';
 import { groupRowsBySection } from '../lib/paramasaPreview';
 import {
   buildLibriNdertimorWorkbook,
@@ -43,51 +43,106 @@ function normalizeBaseName(fileName: string): string {
     .trim();
 }
 
-function extractPrimarySection(rows: ParsedRow[]): string {
-  const firstPosition = rows.find((row) => row.position_number)?.position_number || '';
-  return firstPosition ? firstPosition.split('.')[0].trim() : '';
-}
+type PreviewMetaSuggestion = {
+  meta: ParamasaPreviewMeta;
+  objectSource: string;
+  chapterSource: string;
+};
 
-function suggestPreviewMeta(rows: ParsedRow[], fileName: string, projectName: string): ParamasaPreviewMeta {
+function suggestPreviewMeta(
+  rows: ParsedRow[],
+  fileName: string,
+  projectName: string,
+  workbookMeta: WorkbookMetadataSuggestions
+): PreviewMetaSuggestion {
   const baseName = normalizeBaseName(fileName);
+  const genericFileWords = new Set(['paramasa', 'paramas', 'me', 'cmime', 'oferta', 'libri', 'ndertimor', 'ndertimore', 'xlsx', 'xls']);
+  const fileHint = toTitleCase(
+    baseName.split(/\s+/).filter((word) => !genericFileWords.has(word.toLowerCase())).join(' ')
+  );
   const positions = rows.map((row) => row.position_number).filter(Boolean).slice(0, 8);
-  const objectName = projectName || toTitleCase(baseName || 'Paramasa');
-  const primarySection = extractPrimarySection(rows);
-  const sectionLabel = primarySection ? `${primarySection}.` : 'Paramasa';
+  const objectName = workbookMeta.objectName || projectName || fileHint;
+  const sectionTitle = workbookMeta.sectionTitle || rows.find((row) => row.section_title)?.section_title || '';
+  const offerAccount = workbookMeta.offerAccount || workbookMeta.sectionTitle?.match(/^([IVXLCDM]+|\d+)\b/i)?.[1] || '';
 
   return {
-    executorName: projectName || toTitleCase(baseName.split(' ').slice(0, 3).join(' ') || 'Kryesi i punes'),
-    month: new Date().toLocaleDateString('sq-AL', { month: 'long', year: 'numeric' }),
-    date: new Date().toLocaleDateString('sq-AL'),
-    objectName,
-    offerAccount: baseName ? `No ${baseName}` : 'No —',
-    offerPositions: positions.length > 0 ? positions.join(', ') : '—',
-    sectionTitle: primarySection ? `${sectionLabel} ${baseName || 'Paramasa'}` : (baseName ? `Paramasa / ${baseName}` : 'Paramasa'),
+    meta: {
+      executorName: workbookMeta.executorName || '',
+      month: workbookMeta.month || new Date().toLocaleDateString('sq-AL', { month: 'long', year: 'numeric' }),
+      date: new Date().toLocaleDateString('sq-AL'),
+      objectName,
+      offerAccount,
+      offerPositions: workbookMeta.offerPositions || positions.join(', '),
+      sectionTitle,
+    },
+    objectSource: workbookMeta.objectName
+      ? 'metadata e gjetur në Excel'
+      : projectName
+        ? 'projekti i zgjedhur'
+        : fileHint
+          ? 'emri i skedarit (sugjerim për verifikim)'
+          : 'nuk u gjet në Excel',
+    chapterSource: sectionTitle
+      ? workbookMeta.sectionTitle
+        ? 'metadata/titulli i kapitullit në Excel'
+        : 'rreshti i titullit në Excel'
+      : 'nuk u gjet titull i qartë në Excel',
   };
 }
 
-function mergeBlankFields(current: ParamasaPreviewMeta, suggested: ParamasaPreviewMeta): ParamasaPreviewMeta {
-  return {
-    executorName: current.executorName || suggested.executorName,
-    month: current.month || suggested.month,
-    date: current.date || suggested.date,
-    objectName: current.objectName || suggested.objectName,
-    offerAccount: current.offerAccount || suggested.offerAccount,
-    offerPositions: current.offerPositions || suggested.offerPositions,
-    sectionTitle: current.sectionTitle || suggested.sectionTitle,
-  };
+function mergeSuggestedFields(
+  current: ParamasaPreviewMeta,
+  previousSuggestion: ParamasaPreviewMeta | null,
+  nextSuggestion: ParamasaPreviewMeta
+): ParamasaPreviewMeta {
+  const merged = { ...current };
+  (Object.keys(current) as Array<keyof ParamasaPreviewMeta>).forEach((key) => {
+    const isUntouchedDefault = key === 'executorName' && current[key] === DEFAULT_EXECUTOR_NAME && !previousSuggestion;
+    if (!current[key] || current[key] === previousSuggestion?.[key] || isUntouchedDefault) {
+      merged[key] = nextSuggestion[key];
+    }
+  });
+  return merged;
 }
+
+function splitSectionTitle(value: string): { number: string; title: string } {
+  const match = /^\s*((?:[IVXLCDM]+|\d+)\.?)\s*(.*)$/i.exec(value);
+  return match ? { number: match[1].replace(/\.$/, ''), title: match[2].trim() } : { number: '', title: value };
+}
+
+const LIBRI_PRICE_NOTE = 'Nga Libri Ndërtimor: çmimi nuk vjen nga ky skedar, duhet plotësuar/kombinuar manualisht.';
+const DEFAULT_EXECUTOR_NAME = 'Megrant ING SH.P.K';
 
 export function ImportPage() {
   const navigate = useNavigate();
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
+  const [importDiagnostics, setImportDiagnostics] = useState<ImportDiagnostic[]>([]);
+  const [metadataSuggestionNotes, setMetadataSuggestionNotes] = useState<{ objectSource: string; chapterSource: string } | null>(null);
   const [sectionTitleOverrides, setSectionTitleOverrides] = useState<Record<string, string>>({});
   const [groupingMode, setGroupingMode] = useState<PageGroupingMode>('auto');
   const [manualPlan, setManualPlan] = useState<LibriExportPlanPage[] | null>(null);
   const [currentLibriExportId, setCurrentLibriExportId] = useState<string | null>(null);
 
   const detectedSections = useMemo(() => groupRowsBySection(rows), [rows]);
+  const rowReviewIssues = useMemo(
+    () => rows.flatMap((row) =>
+      (row.issues ?? [])
+        .filter((issue) => issue !== LIBRI_PRICE_NOTE)
+        .map((message) => ({ position: row.position_number || '—', rowNumber: row.source_row, message }))
+    ),
+    [rows]
+  );
+  const computedImportTotal = useMemo(
+    () => rows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0),
+    [rows]
+  );
+  const unpricedPositionCount = useMemo(
+    () => rows.filter((row) => row.source !== 'libri' && row.quantity > 0 && row.unit_price === 0).length,
+    [rows]
+  );
+  const hasTotalMismatch = declaredTotal !== null &&
+    Math.abs(declaredTotal - computedImportTotal) > Math.max(1, declaredTotal * 0.005);
   const autoPlan = useMemo(
     () => (rows.length > 0 ? planLibriExport(rows, sectionTitleOverrides) : []),
     [rows, sectionTitleOverrides]
@@ -107,7 +162,7 @@ export function ImportPage() {
   const [libriExportLoading, setLibriExportLoading] = useState(false);
   const [zipExportLoading, setZipExportLoading] = useState(false);
   const [previewMeta, setPreviewMeta] = useState<ParamasaPreviewMeta>({
-    executorName: 'Megrant ING SH.P.K',
+    executorName: DEFAULT_EXECUTOR_NAME,
     month: '',
     date: new Date().toLocaleDateString('sq-AL'),
     objectName: '',
@@ -125,6 +180,7 @@ export function ImportPage() {
   const [historyActionId, setHistoryActionId] = useState<string | null>(null);
   const { showToast, showSavedToast } = useToast();
   const layoutSaveQueue = useRef<Promise<void>>(Promise.resolve());
+  const previousAutoSuggestion = useRef<ParamasaPreviewMeta | null>(null);
 
   const reloadLibriHistory = () => {
     void fetchLibriExportRecords()
@@ -309,8 +365,14 @@ export function ImportPage() {
     setPreviewMeta((current) => ({
       ...current,
       executorName: current.executorName || selectedProject.name,
-      objectName: current.objectName || selectedProject.name,
+      objectName:
+        !current.objectName || current.objectName === previousAutoSuggestion.current?.objectName
+          ? selectedProject.name
+          : current.objectName,
     }));
+    if (previousAutoSuggestion.current) {
+      previousAutoSuggestion.current = { ...previousAutoSuggestion.current, objectName: selectedProject.name };
+    }
   }, [selectedProjectId, projects]);
 
   const handleFileUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -323,9 +385,10 @@ export function ImportPage() {
     setFileName(file.name);
     setRows([]);
     setDeclaredTotal(null);
+    setImportDiagnostics([]);
     setSectionTitleOverrides({});
     try {
-      const { rows: parsedRows, declaredTotal: fileTotal } = await parseExcelWithValidation(file);
+      const { rows: parsedRows, declaredTotal: fileTotal, diagnostics, suggestedMeta } = await parseExcelWithValidation(file);
       if (parsedRows.length === 0) {
         setFileName('');
         event.target.value = '';
@@ -334,9 +397,17 @@ export function ImportPage() {
       }
       setRows(parsedRows);
       setDeclaredTotal(fileTotal);
+      setImportDiagnostics(diagnostics);
       const selectedProject = projects.find((project) => project.id === selectedProjectId);
-      const suggested = suggestPreviewMeta(parsedRows, file.name, selectedProject?.name || '');
-      const mergedMeta = mergeBlankFields(previewMeta, suggested);
+      const { meta: suggested, ...suggestionNotes } = suggestPreviewMeta(
+        parsedRows,
+        file.name,
+        selectedProject?.name || '',
+        suggestedMeta
+      );
+      const mergedMeta = mergeSuggestedFields(previewMeta, previousAutoSuggestion.current, suggested);
+      previousAutoSuggestion.current = suggested;
+      setMetadataSuggestionNotes(suggestionNotes);
       setPreviewMeta(mergedMeta);
 
       const computedTotal = parsedRows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
@@ -362,8 +433,8 @@ export function ImportPage() {
           );
         }
       }
-    } catch {
-      showToast('Gabim gjatë leximit të Excel-it.', 'error');
+    } catch (error) {
+      showToast(error instanceof Error ? `Gabim gjatë leximit të Excel-it: ${error.message}` : 'Gabim gjatë leximit të Excel-it.', 'error');
     } finally {
       setLoading(false);
     }
@@ -440,10 +511,29 @@ export function ImportPage() {
 
   const handleUpdateRow = (row: ParsedRow, changes: Partial<ParsedRow>) => {
     const updatedRow = { ...row, ...changes };
-    setRows((current) => current.map((r) => (r === row ? updatedRow : r)));
+    const issues = (row.issues ?? []).filter((issue) => {
+      if (issue === 'Mungon njësia matëse.') return !updatedRow.unit.trim();
+      if (issue === 'Sasia është negative; kontrolloje para eksportit.') return updatedRow.quantity < 0;
+      if (issue === 'Sasia është zero për një pozicion të numëruar; kontrolloje.') return updatedRow.quantity === 0;
+      if (issue === 'Sasia është zero për një rresht të importuar; kontrolloje.') return updatedRow.quantity === 0;
+      if (issue === 'Çmimi për njësi është negativ; kontrolloje para eksportit.') return updatedRow.unit_price < 0;
+      if (issue.startsWith('Totali i deklaruar (')) {
+        return changes.quantity === undefined && changes.unit_price === undefined && changes.total_price === undefined;
+      }
+      return true;
+    });
+    if (!updatedRow.unit.trim() && !issues.includes('Mungon njësia matëse.')) issues.push('Mungon njësia matëse.');
+    if (updatedRow.quantity < 0 && !issues.includes('Sasia është negative; kontrolloje para eksportit.')) {
+      issues.push('Sasia është negative; kontrolloje para eksportit.');
+    }
+    if (updatedRow.unit_price < 0 && !issues.includes('Çmimi për njësi është negativ; kontrolloje para eksportit.')) {
+      issues.push('Çmimi për njësi është negativ; kontrolloje para eksportit.');
+    }
+    const updatedWithIssues = { ...updatedRow, issues };
+    setRows((current) => current.map((r) => (r === row ? updatedWithIssues : r)));
     setManualPlan((current) => current?.map((page) => ({
       ...page,
-      rows: page.rows.map((planRow) => (planRow === row ? updatedRow : planRow)),
+      rows: page.rows.map((planRow) => (planRow === row ? updatedWithIssues : planRow)),
     })) ?? null);
   };
 
@@ -605,101 +695,208 @@ export function ImportPage() {
         <div className="excel-tab-content">
           <div className="panel import-panel">
             <div className="import-meta-panel">
-          <div className="import-meta-panel-head">
-            <strong>Metadata e paramasës</strong>
-            <span className="muted">Sugjerohen automatikisht nga sistemi, pastaj mund t'i ndryshosh manualisht.</span>
-          </div>
-          <div className="form-grid import-meta-grid">
-            <label className="full-width-field">
-              Kryesi i punes
-              <input value={previewMeta.executorName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, executorName: e.target.value }))} placeholder="p.sh. Megrant ING SH.P.K" />
-            </label>
-            <label>
-              Muaji
-              <input value={previewMeta.month} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, month: e.target.value }))} placeholder="p.sh. Korrik 2026" />
-            </label>
-            <label>
-              Data
-              <input value={previewMeta.date} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, date: e.target.value }))} placeholder="03.07.2026" />
-            </label>
-            <label className="full-width-field">
-              Objekti
-              <input value={previewMeta.objectName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, objectName: e.target.value }))} placeholder="p.sh Renovimi i dyshemesë në MIQ" />
-            </label>
-            <label>
-              Numri i kapitullit ne paramase
-              <input value={previewMeta.offerAccount} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerAccount: e.target.value }))} placeholder="p.sh I ose II" />
-            </label>
-            <label>
-              Pozicioni me oferte
-              <input value={previewMeta.offerPositions} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerPositions: e.target.value }))} placeholder="p.sh 1.1, 1.2" />
-            </label>
-            <label className="full-width-field">
-              Titulli i seksionit-kapitullit
-              <input value={previewMeta.sectionTitle} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, sectionTitle: e.target.value }))} placeholder="p.sh I. Punimet përgatitore" />
-            </label>
-          </div>
-        </div>
+              <div className="import-meta-panel-head">
+                <div>
+                  <span className="import-section-kicker">TË DHËNAT E DOKUMENTIT</span>
+                  <h2>Metadata e paramasës</h2>
+                </div>
+                <span className="import-meta-edit-note"><Info size={15} /> Sugjerimet mund t’i verifikosh dhe ndryshosh para shkarkimit.</span>
+              </div>
+              {metadataSuggestionNotes && (
+                <div className="import-meta-source-note">
+                  <Info size={16} />
+                  <p>
+                    <strong>Burimi i sugjerimeve:</strong> Objekti — {metadataSuggestionNotes.objectSource}; kapitulli — {metadataSuggestionNotes.chapterSource}.
+                    {' '}Të dhënat e nxjerra nga emri i skedarit duhen konfirmuar.
+                  </p>
+                </div>
+              )}
+              <div className="form-grid import-meta-grid">
+                <label className="full-width-field">
+                  Kryesi i punës
+                  <input value={previewMeta.executorName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, executorName: e.target.value }))} placeholder="p.sh. Megrant ING SH.P.K" />
+                </label>
+                <label>
+                  Muaji
+                  <input value={previewMeta.month} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, month: e.target.value }))} placeholder="p.sh. Korrik 2026" />
+                </label>
+                <label>
+                  Data
+                  <input value={previewMeta.date} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, date: e.target.value }))} placeholder="p.sh. 03.07.2026" />
+                </label>
+                <label className="full-width-field">
+                  Objekti / emërtimi i projektit
+                  <input value={previewMeta.objectName} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, objectName: e.target.value }))} placeholder="p.sh. Renovimi i dyshemesë në MIQ" />
+                </label>
+                <label>
+                  Numri i kapitullit në paramasë
+                  <input value={previewMeta.offerAccount} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerAccount: e.target.value }))} placeholder="p.sh. II" />
+                </label>
+                <label>
+                  Pozicionet e ofertës
+                  <input value={previewMeta.offerPositions} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, offerPositions: e.target.value }))} placeholder="p.sh. 1.1, 1.2" />
+                </label>
+                <label className="full-width-field">
+                  Titulli i seksionit / kapitullit
+                  <input value={previewMeta.sectionTitle} onChange={(e) => setPreviewMeta((meta) => ({ ...meta, sectionTitle: e.target.value }))} placeholder="Shkruaj titullin e plotë të seksionit" />
+                </label>
+              </div>
+            </div>
 
         <div className="import-controls">
           <label className="import-label-select">
-            Zgjidh Projektin (opsional)
+            <span>Projekti <small>Opsionale</small></span>
             <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}>
               <option value="">-- Krijo Projekt të Ri --</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
           </label>
           <label className="import-label-input">
-            Zgjidh Excel
+            <span>Skedari Excel <small>Kërkohet</small></span>
             <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} disabled={loading} className="import-file-input" />
+            {fileName && <span className="import-selected-file"><FileSpreadsheet size={16} />{fileName}</span>}
           </label>
         </div>
 
-        {rows.length > 0 && !loading && declaredTotal !== null && (() => {
-          const computedTotal = rows.reduce((sum, row) => sum + (Number(row.total_price) || 0), 0);
-          const mismatch = Math.abs(declaredTotal - computedTotal) > Math.max(1, declaredTotal * 0.005);
-          if (!mismatch) return null;
-          return (
-            <div className="import-total-warning">
-              ⚠ <strong>Kujdes:</strong> skedari vetë thotë totali është <strong>{declaredTotal.toFixed(2)}€</strong>, por sistemi llogariti{' '}
-              <strong>{computedTotal.toFixed(2)}€</strong> — kontrollo Tabelën, diçka mund të mungojë ose të jetë lexuar gabim.
+        {rows.length > 0 && !loading && (
+          <section className={`import-analysis-summary${hasTotalMismatch ? ' has-issues' : ''}`} aria-live="polite">
+            <div className="import-analysis-heading">
+              <span className={`import-analysis-icon${hasTotalMismatch ? ' is-warning' : ' is-success'}`}>
+                {hasTotalMismatch ? <AlertTriangle size={20} /> : <CheckCircle2 size={20} />}
+              </span>
+              <div>
+                <span className="import-section-kicker">REZULTATI I ANALIZËS</span>
+                <h2>{hasTotalMismatch ? 'Importi kërkon verifikim' : 'Skedari u analizua'}</h2>
+                <p>{hasTotalMismatch ? 'Krahaso totalet dhe shënimet me Excel-in origjinal para se të vazhdosh.' : 'Kontrollo sugjerimet dhe të dhënat e nxjerra para shkarkimit.'}</p>
+              </div>
             </div>
-          );
-        })()}
+            <div className="import-analysis-stats">
+              <div><strong>{rows.length}</strong><span>Pozicione të lexuara</span></div>
+              <div><strong>{detectedSections.length}</strong><span>Seksione të gjetura</span></div>
+              {unpricedPositionCount > 0 && (
+                <div className="is-neutral"><strong>{unpricedPositionCount}</strong><span>Pozicione pa çmim</span></div>
+              )}
+              {rowReviewIssues.length + importDiagnostics.length > 0 && (
+                <div className="is-warning"><strong>{rowReviewIssues.length + importDiagnostics.length}</strong><span>Shënime për verifikim</span></div>
+              )}
+            </div>
+            {hasTotalMismatch && declaredTotal !== null && (
+              <div className="import-total-warning" role="alert">
+                <AlertTriangle size={18} />
+                <p>
+                  <strong>Mospërputhje e totalit.</strong> Sipas skedarit: <strong>{declaredTotal.toLocaleString('sq-AL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</strong>;
+                  sipas pozicioneve të lexuara: <strong>{computedImportTotal.toLocaleString('sq-AL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</strong>.
+                  {' '}Kontrollo kolonat dhe totalin në dokumentin burimor.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {rows.length > 0 && !loading && (rowReviewIssues.length > 0 || importDiagnostics.length > 0) && (
+          <section className="panel panel-top-gap import-review-panel" aria-live="polite">
+            <div className="import-review-heading">
+              <span className="import-analysis-icon is-warning"><AlertTriangle size={19} /></span>
+              <div>
+                <h3>Shënime për verifikim</h3>
+                <p>{rowReviewIssues.length} shënime te pozicionet · {importDiagnostics.length} paralajmërime të fletës</p>
+              </div>
+            </div>
+            <details className="import-review-details">
+              <summary>Shfaq detajet dhe rreshtat burimorë</summary>
+              <ul className="import-review-list">
+                {rowReviewIssues.map((issue, index) => (
+                  <li key={`row-${index}`}>
+                    <span className="import-review-location">{issue.rowNumber ? `Rreshti ${issue.rowNumber}` : 'Pozicioni'}{issue.position !== '—' ? ` · Pozicioni ${issue.position}` : ''}</span>
+                    <span>{issue.message}</span>
+                  </li>
+                ))}
+                {importDiagnostics.map((issue, index) => (
+                  <li key={`sheet-${index}`}>
+                    <span className="import-review-location">Fleta {issue.sheet_name}{issue.row_number ? ` · Rreshti ${issue.row_number}` : ''}</span>
+                    <span>{issue.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </section>
+        )}
+
+        {rows.some((row) => row.source === 'libri') && (
+          <div className="import-total-warning import-review-note">
+            <strong>Shënim për Librin Ndërtimor:</strong> sasia për secilin pozicion merret nga shuma e kolonës A në matje;
+            rezultatet A × B verifikohen veçmas. Çmimet nuk përfshihen në Librin burimor dhe duhen plotësuar/kombinuar veçmas.
+            Kontrollo gjithmonë matjet kundrejt dokumentit origjinal.
+          </div>
+        )}
 
         {rows.length > 0 && !loading && detectedSections.length > 0 && (
-          <section className="panel panel-top-gap">
-            <h3 className="panel-title">Paneli i Validimit — kontrollo titujt e seksioneve</h3>
-            <p className="muted field-hint">
-              Kontrollo titujt e mëposhtëm para se të krijohen faqet e Librit — nëse ndonjë del bosh ose gabim (p.sh. "3." në vend të
-              "3. Punët e Ujit"), redaktoje këtu; ndryshimi zbatohet automatikisht te Preview dhe te çdo shkarkim.
-            </p>
+          <section className="panel panel-top-gap import-sections-panel">
+            <div className="import-sections-heading">
+              <div>
+                <span className="import-section-kicker">RISHIKIMI I STRUKTURËS</span>
+                <h2>Kapitujt dhe seksionet</h2>
+                <p>Kontrollo numrin dhe titullin e secilit kapitull. Ndryshimet ndikojnë në organizimin dhe faqosjen e Librit.</p>
+              </div>
+              <span className="import-sections-count">{detectedSections.length} seksione</span>
+            </div>
             <div className="validation-section-list">
-              {detectedSections.map((section) => (
-                <label key={section.sectionKey} className="validation-section-row">
-                  <span className="muted">{section.rows.length} poz.</span>
-                  <input
-                    type="text"
-                    value={sectionTitleOverrides[section.sectionKey] ?? section.sectionLabel}
-                    onChange={(e) =>
-                      setSectionTitleOverrides((current) => ({ ...current, [section.sectionKey]: e.target.value }))
-                    }
-                  />
-                </label>
-              ))}
+              {detectedSections.map((section) => {
+                const value = sectionTitleOverrides[section.sectionKey] ?? section.sectionLabel;
+                const parts = splitSectionTitle(value);
+                const titleMissing = !parts.title;
+                return (
+                  <div key={section.sectionKey} className={`validation-section-row${titleMissing ? ' is-unverified' : ''}`}>
+                    <div className="validation-section-count">
+                      <strong>{section.rows.length}</strong>
+                      <span>pozicione</span>
+                    </div>
+                    <label className="validation-section-number">
+                      <span>Nr. i kapitullit</span>
+                      <input
+                        type="text"
+                        value={parts.number}
+                        aria-label={`Numri i kapitullit për ${section.sectionLabel}`}
+                        placeholder="p.sh. II"
+                        onChange={(e) => {
+                          const nextNumber = e.target.value.trim();
+                          const nextValue = [nextNumber, parts.title].filter(Boolean).join('. ');
+                          setSectionTitleOverrides((current) => ({ ...current, [section.sectionKey]: nextValue }));
+                        }}
+                      />
+                    </label>
+                    <label className="validation-section-title">
+                      <span>Titulli i kapitullit / seksionit</span>
+                      <input
+                        type="text"
+                        value={parts.title}
+                        aria-label={`Titulli i kapitullit për ${section.sectionLabel}`}
+                        placeholder={titleMissing ? 'Titulli nuk u gjet — plotësoje nga Excel-i origjinal' : 'Titulli i kapitullit'}
+                        onChange={(e) => {
+                          const nextValue = [parts.number ? `${parts.number}.` : '', e.target.value.trim()].filter(Boolean).join(' ');
+                          setSectionTitleOverrides((current) => ({ ...current, [section.sectionKey]: nextValue }));
+                        }}
+                      />
+                    </label>
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
 
         {rows.length > 0 && !loading && (
-          <div className="import-preview-toolbar import-preview-head">
-            <strong>Preview i paramasës</strong>
+          <div className="import-preview-toolbar import-preview-head import-view-heading">
+            <div>
+              <span className="import-section-kicker">PARAQITJA NË LIBËR</span>
+              <strong>Kontrollo pozicionet dhe faqosjen</strong>
+            </div>
             <div className="view-switch">
-              <button type="button" className={`filter-chip ${previewMode === 'preview' ? 'active' : ''}`} onClick={() => setPreviewMode('preview')}>
-                Preview
+              <button type="button" aria-pressed={previewMode === 'preview'} className={`filter-chip ${previewMode === 'preview' ? 'active' : ''}`} onClick={() => setPreviewMode('preview')}>
+                Pamja e faqes
               </button>
-              <button type="button" className={`filter-chip ${previewMode === 'table' ? 'active' : ''}`} onClick={() => setPreviewMode('table')}>
-                Tabelë
+              <button type="button" aria-pressed={previewMode === 'table'} className={`filter-chip ${previewMode === 'table' ? 'active' : ''}`} onClick={() => setPreviewMode('table')}>
+                Tabela e të dhënave
               </button>
             </div>
           </div>
@@ -744,6 +941,7 @@ export function ImportPage() {
                       <th className="import-table-cell">Sasia</th>
                       <th className="import-table-cell">Çmimi</th>
                       <th className="import-table-cell">Totali</th>
+                      <th className="import-table-cell">Statusi</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -753,14 +951,23 @@ export function ImportPage() {
                         <td className="import-table-cell">{row.description}</td>
                         <td className="import-table-cell">{row.unit}</td>
                         <td className="import-table-cell">{row.quantity}</td>
-                        <td className="import-table-cell">{Number(row.unit_price).toFixed(2)}€</td>
-                        <td className="import-table-cell col-bold">{Number(row.total_price).toFixed(2)}€</td>
+                        <td className="import-table-cell">{Number(row.unit_price).toLocaleString('sq-AL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                        <td className="import-table-cell col-bold">{Number(row.total_price).toLocaleString('sq-AL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</td>
+                        <td className="import-table-cell">
+                          {(row.issues ?? []).some((issue) => issue !== LIBRI_PRICE_NOTE) ? (
+                            <span className="import-row-status is-warning"><AlertTriangle size={14} /> Verifiko</span>
+                          ) : row.source !== 'libri' && row.quantity > 0 && row.unit_price === 0 ? (
+                            <span className="import-row-status is-neutral"><Info size={14} /> Pa çmim</span>
+                          ) : (
+                            <span className="import-row-status is-success"><CheckCircle2 size={14} /> Në rregull</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                {rows.length > 20 && <div className="muted import-table-more">...dhe {rows.length - 20} rreshta të tjerë.</div>}
+                {rows.length > 20 && <div className="muted import-table-more">Po shfaqen 20 nga {rows.length} pozicionet. Përdor pamjen e faqes për të kontrolluar dokumentin e plotë.</div>}
               </>
             )}
 

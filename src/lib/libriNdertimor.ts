@@ -16,6 +16,7 @@ export type LibriMeasurementLine = {
   a: number;
   b: number;
   result: number;
+  rowNumber: number;
 };
 
 export type LibriPosition = {
@@ -24,6 +25,13 @@ export type LibriPosition = {
   unit: string;
   quantity: number;
   measurements: LibriMeasurementLine[];
+  issues: string[];
+  sourceRow: number;
+};
+
+export type LibriSheetIssue = {
+  rowNumber?: number;
+  message: string;
 };
 
 export type LibriMeta = {
@@ -41,6 +49,7 @@ export type LibriSheetResult = {
   sheetName: string;
   meta: LibriMeta;
   positions: LibriPosition[];
+  issues: LibriSheetIssue[];
 };
 
 function toText(value: unknown): string {
@@ -56,13 +65,39 @@ function normalize(value: string): string {
     .trim();
 }
 
-function parseNumber(value: string): number {
-  const cleaned = value.replace(/\s+/g, '').replace(',', '.');
-  const parsed = Number(cleaned);
-  return Number.isFinite(parsed) ? parsed : 0;
+function parseNumber(value: string): { value: number; ambiguous: boolean } {
+  let normalized = value.replace(/\s+/g, '');
+  const lastComma = normalized.lastIndexOf(',');
+  const lastDot = normalized.lastIndexOf('.');
+  let ambiguous = false;
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    const decimal = lastComma > lastDot ? ',' : '.';
+    const grouping = decimal === ',' ? '.' : ',';
+    normalized = normalized.split(grouping).join('');
+    const decimalIndex = normalized.lastIndexOf(decimal);
+    normalized = `${normalized.slice(0, decimalIndex).split(decimal).join('')}.${normalized.slice(decimalIndex + 1)}`;
+  } else {
+    const separator = lastComma >= 0 ? ',' : lastDot >= 0 ? '.' : null;
+    if (separator) {
+      const segments = normalized.split(separator);
+      if (segments.length > 2 && segments.slice(1).every((segment) => segment.length === 3)) {
+        normalized = segments.join('');
+      } else if (segments.length > 2) {
+        const decimal = segments.pop() || '';
+        normalized = `${segments.join('')}.${decimal}`;
+      } else {
+        ambiguous = segments[1]?.length === 3;
+        normalized = normalized.replace(separator, '.');
+      }
+    }
+  }
+
+  const parsed = Number(normalized);
+  return { value: Number.isFinite(parsed) ? parsed : 0, ambiguous };
 }
 
-const MEASUREMENT_LINE_RE = /^([\d.,]+)\s*x\s*([\d.,]+)\s*=\s*([\d.,]+)$/i;
+const MEASUREMENT_LINE_RE = /^([\d.,]+)\s*[x×]\s*([\d.,]+)\s*=\s*([\d.,]+)$/i;
 const GJITHSEJT_RE = /^gjithsejt\s*:?$/i;
 const CARRY_OVER_RE = /per\s*bartje|it\s*continuous/i;
 const SIGNATURE_RE = /kryesi\s*i\s*pun|organi\s*mbikqyr/i;
@@ -116,18 +151,41 @@ function extractMeta(rows: unknown[][]): LibriMeta {
     });
   });
 
-  // rreshtat vijues të "Objekti-Building" (merge vertikal, p.sh. F3:H6) mund të vazhdojnë
-  // në rreshta pa etiketë — i marrim derisa hasim "Libri ndërtimor"
-  const libriRowIndex = findRowIndex(rows, (row) => row.some((c) => normalize(toText(c)).includes('libri ndertimor')));
-  const objectStartIndex = findRowIndex(rows, (row) => row.some((c) => normalize(toText(c)).startsWith('objekti-building')));
+  const objectLabelPattern = /^(?:objekti|objekt|object|building)\s*(?:[-/]\s*(?:building|object))?\s*[:\-]?\s*(.*)$/i;
+  const objectStartIndex = findRowIndex(rows, (row) => row.some((cell) => objectLabelPattern.test(toText(cell))));
   if (objectStartIndex >= 0) {
-    for (let i = objectStartIndex + 1; i < (libriRowIndex >= 0 ? libriRowIndex : objectStartIndex + 4); i += 1) {
-      const row = rows[i] || [];
-      const extraText = row.map(toText).filter(Boolean).join(' ');
-      if (extraText && !normalize(extraText).startsWith('libri ndertimor')) objectLines.push(extraText);
+    const row = rows[objectStartIndex] || [];
+    const objectCellIndex = row.findIndex((cell) => objectLabelPattern.test(toText(cell)));
+    const objectCellText = toText(row[objectCellIndex]);
+    const inlineMatch = objectLabelPattern.exec(objectCellText);
+    const inlineObject = toText(inlineMatch?.[1]);
+    if (inlineObject) {
+      objectLines.push(inlineObject);
+    } else {
+      const sameRowValue = row.slice(objectCellIndex + 1).map(toText).find(Boolean);
+      if (sameRowValue) objectLines.push(sameRowValue);
+
+      for (let i = objectStartIndex + 1; i < Math.min(rows.length, objectStartIndex + 4); i += 1) {
+        const nextRow = rows[i] || [];
+        const values = nextRow.map(toText).filter(Boolean);
+        if (values.length === 0) continue;
+        const firstValue = normalize(values[0]);
+        if (
+          firstValue.startsWith('libri ndertimor') ||
+          firstValue.startsWith('construction book') ||
+          firstValue.startsWith('kryeresi') ||
+          firstValue.startsWith('muaji') ||
+          firstValue.startsWith('pozicioni i punes') ||
+          firstValue.startsWith('njesia matese') ||
+          firstValue.startsWith('llogaria me oferte') ||
+          firstValue.startsWith('masa')
+        ) break;
+        if (values.length > 1 || /^(?:[IVXLCDM]+|\d+(?:\.\d+)*)\s+\S/i.test(values[0])) break;
+        objectLines.push(values.join(' '));
+      }
     }
   }
-  objectName = objectLines.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  objectName = [...new Set(objectLines.map((line) => line.trim()).filter(Boolean))].join(' ').replace(/\s+/g, ' ').trim();
 
   // "Llogaria me ofertë" qëndron gjithmonë në kolonën F (index 5), dhe "Poz. Me ofertë" në
   // kolonën H (index 7) — pavarësisht se në cilin rresht saktësisht bien (ndryshon nga faqja
@@ -164,6 +222,17 @@ function extractMeta(rows: unknown[][]): LibriMeta {
 export function parseLibriSheet(rows: unknown[][], sheetName: string): LibriSheetResult {
   const meta = extractMeta(rows);
   const positions: LibriPosition[] = [];
+  const issues: LibriSheetIssue[] = [];
+
+  [
+    ['Kryesi i punëve', meta.executorName],
+    ['Muaji', meta.month],
+    ['Objekti', meta.objectName],
+    ['Titulli i seksionit', meta.sectionTitle],
+    ['Njësia matëse', meta.unit],
+  ].forEach(([label, value]) => {
+    if (!value) issues.push({ message: `Nuk u identifikua metadata "${label}"; kontrolloje para eksportit.` });
+  });
 
   // gjej rreshtin ku fillon zona e të dhënave (pas rreshtit të etiketave "A = / B = / A+B")
   const labelsRowIndex = findRowIndex(rows, (row) =>
@@ -188,6 +257,9 @@ export function parseLibriSheet(rows: unknown[][], sheetName: string): LibriShee
 
       // skano rreshtat pasues për linjat e matjes deri te "Gjithsejt :" ose pozicioni tjetër
       const measurements: LibriMeasurementLine[] = [];
+      const positionIssues: string[] = [];
+      let declaredPositionTotal: number | null = null;
+      let declaredTotalRowNumber: number | null = null;
       let scan = cursor + 1;
       while (scan < endIndex) {
         const scanRow = rows[scan] || [];
@@ -197,15 +269,43 @@ export function parseLibriSheet(rows: unknown[][], sheetName: string): LibriShee
         const eText = toText(scanRow[4]); // kolona E
         const measurementMatch = MEASUREMENT_LINE_RE.exec(eText);
         if (measurementMatch) {
+          const a = parseNumber(measurementMatch[1]);
+          const b = parseNumber(measurementMatch[2]);
+          const result = parseNumber(measurementMatch[3]);
+          const expectedResult = a.value * b.value;
+          const tolerance = Math.max(0.01, Math.abs(expectedResult) * 0.005);
+          if (a.ambiguous || b.ambiguous || result.ambiguous) {
+            positionIssues.push(`Rreshti ${scan + 1}: numër matjeje me ndarës të paqartë ("${eText}"); verifiko vlerat.`);
+          }
+          if (Math.abs(expectedResult - result.value) > tolerance) {
+            positionIssues.push(
+              `Rreshti ${scan + 1}: rezultati i matjes (${result.value}) nuk përputhet me A × B (${expectedResult.toFixed(3)}).`
+            );
+          }
           measurements.push({
             raw: eText,
-            a: parseNumber(measurementMatch[1]),
-            b: parseNumber(measurementMatch[2]),
-            result: parseNumber(measurementMatch[3]),
+            a: a.value,
+            b: b.value,
+            result: result.value,
+            rowNumber: scan + 1,
           });
+        } else if (/[x×=]/i.test(eText) && /\d/.test(eText)) {
+          positionIssues.push(`Rreshti ${scan + 1}: rreshti i matjes nuk u njoh ("${eText}").`);
         }
 
         if (GJITHSEJT_RE.test(eText)) {
+          const totalCell = scanRow[7];
+          if (typeof totalCell === 'number' && Number.isFinite(totalCell)) {
+            declaredPositionTotal = totalCell;
+            declaredTotalRowNumber = scan + 1;
+          } else if (typeof totalCell === 'string' && /^[+-]?[\d.,]+$/.test(totalCell.trim())) {
+            const parsedTotal = parseNumber(totalCell);
+            declaredPositionTotal = parsedTotal.value;
+            declaredTotalRowNumber = scan + 1;
+            if (parsedTotal.ambiguous) {
+              positionIssues.push(`Rreshti ${scan + 1}: totali i pozicionit "${totalCell}" ka ndarës të paqartë; verifikoje.`);
+            }
+          }
           scan += 1;
           break;
         }
@@ -213,6 +313,17 @@ export function parseLibriSheet(rows: unknown[][], sheetName: string): LibriShee
       }
 
       const quantity = measurements.reduce((sum, line) => sum + line.a, 0);
+      if (measurements.length === 0) {
+        positionIssues.push('Nuk u gjet asnjë rresht matjeje për këtë pozicion; kontrollo kolonën E dhe formatin e matjeve.');
+      }
+      if (declaredPositionTotal !== null) {
+        const tolerance = Math.max(0.01, Math.abs(declaredPositionTotal) * 0.005);
+        if (Math.abs(declaredPositionTotal - quantity) > tolerance) {
+          positionIssues.push(
+            `Rreshti ${declaredTotalRowNumber}: totali i fletës (${declaredPositionTotal}) nuk përputhet me shumën e kolonës A (${quantity}).`
+          );
+        }
+      }
 
       positions.push({
         positionNumber,
@@ -220,6 +331,8 @@ export function parseLibriSheet(rows: unknown[][], sheetName: string): LibriShee
         unit: meta.unit || '',
         quantity,
         measurements,
+        issues: positionIssues,
+        sourceRow: cursor + 1,
       });
 
       cursor = scan;
@@ -229,5 +342,5 @@ export function parseLibriSheet(rows: unknown[][], sheetName: string): LibriShee
     cursor += 1;
   }
 
-  return { sheetName, meta, positions };
+  return { sheetName, meta, positions, issues };
 }

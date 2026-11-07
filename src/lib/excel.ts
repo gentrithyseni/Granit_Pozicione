@@ -9,6 +9,7 @@ export type ParsedRow = {
   unit_price: number;
   total_price: number;
   sheet_name?: string;
+  source_row?: number;
   issues?: string[];
   /** Titulli i seksionit real (nga rreshti me numër romak, p.sh. "II PUNËT E DEMOLIMIT"),
    * kapur gjatë parsimit — përdoret si prioritet mbi grupimin e nxjerrë nga numri i pozicionit,
@@ -49,17 +50,83 @@ function isEmptyRow(row: unknown[]): boolean {
   return row.every((cell) => toCellText(cell) === '');
 }
 
+function findLabeledValue(
+  rows: unknown[][],
+  labelPattern: RegExp,
+  isValid: (value: string) => boolean = () => true,
+): string {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex] || [];
+    for (let cellIndex = 0; cellIndex < row.length; cellIndex += 1) {
+      const text = toCellText(row[cellIndex]);
+      if (!text) continue;
+      const match = labelPattern.exec(text);
+      if (!match) continue;
+
+      const inlineValue = toCellText(match[1]);
+      const isMarkerOnly = /^\d+\s*[:.)-]?$/.test(inlineValue);
+      if (inlineValue && !isMarkerOnly) {
+        const value = inlineValue.replace(/^[:\s-]+/, '').trim();
+        if (isValid(value)) return value;
+        continue;
+      }
+
+      const sameRowValue = row.slice(cellIndex + 1).map(toCellText).find(Boolean);
+      if (sameRowValue && isValid(sameRowValue)) return sameRowValue;
+
+      for (let nextIndex = rowIndex + 1; nextIndex < Math.min(rows.length, rowIndex + 3); nextIndex += 1) {
+        const nextRow = rows[nextIndex] || [];
+        const nextValue = nextRow.map(toCellText).find(Boolean);
+        if (nextValue && !labelPattern.test(nextValue) && isValid(nextValue)) return nextValue;
+      }
+    }
+  }
+  return '';
+}
+
+function extractWorkbookMetadata(rows: unknown[][]): WorkbookMetadataSuggestions {
+  return {
+    executorName: findLabeledValue(
+      rows,
+      /^(?:kryer[eë]si i pun[eë]ve|kryesi|kontraktori|kontraktuesi|operatori ekonomik|contractor)\s*(?:[-/:]\s*)?(.*)$/i,
+      (value) => value.length <= 120 && !/\b(do te|duhet te|eshte pergjegjes|siguron)\b/.test(normalizeString(value)),
+    ),
+    month: findLabeledValue(rows, /^(?:muaji|month)\s*(?:[-/:]\s*)?(.*)$/i),
+    objectName: findLabeledValue(rows, /^(?:emri i objektit|em[eë]rtimi i objektit|objekti|objekt|object|building|projekti|project)\s*(?:[-/]\s*(?:building|object))?\s*[:\-]?\s*(.*)$/i),
+    offerAccount: findLabeledValue(rows, /^(?:llogaria me ofert[eë]|offer account|kapitulli|chapter)\s*(?:[-/:]\s*)?(.*)$/i),
+    offerPositions: findLabeledValue(rows, /^(?:poz\.?\s*me ofert[eë]|pozicionet me ofert[eë]|offer positions)\s*(?:[-/:]\s*)?(.*)$/i),
+    sectionTitle: findLabeledValue(rows, /^(?:titulli i seksionit|titulli i kapitullit|section title|chapter title)\s*(?:[-/:]\s*)?(.*)$/i),
+  };
+}
+
 function isSignatureRow(row: unknown[]): boolean {
   const text = normalizeString(rowText(row));
   return text.includes('kryesi i pun') || text.includes('organi mbikqyr') || text.includes('signature');
 }
 
 type ColumnMap = {
+  positionCol: number;
   descriptionCol: number;
   unitCol: number;
   qtyCol: number;
   priceCol: number;
   totalCol: number;
+};
+
+export type ImportDiagnostic = {
+  severity: 'warning';
+  sheet_name: string;
+  row_number?: number;
+  message: string;
+};
+
+export type WorkbookMetadataSuggestions = {
+  executorName?: string;
+  month?: string;
+  objectName?: string;
+  offerAccount?: string;
+  offerPositions?: string;
+  sectionTitle?: string;
 };
 
 // Fjalëkyçe në shqip DHE serbisht/boshnjakisht — disa paramasa reale (p.sh. nga kontrata të
@@ -75,26 +142,30 @@ const TOTAL_KEYWORDS = ['shuma', 'gjithsej', 'ukupno', 'total'];
 /** Gjen kolonat (përshkrim/njësi/sasi/çmim/total) në një rresht header duke kërkuar fjalëkyçe,
  * në vend të indeksit fiks — kjo e bën parsimin të funksionojë pavarësisht gjuhës apo renditjes
  * së kolonave. Kthen null nëse rreshti s'duket si header i vlefshëm (mungon përshkrim/sasi/çmim). */
-function detectColumnMap(row: unknown[]): ColumnMap | null {
+function detectColumnMap(row: unknown[], situacionContext = false): ColumnMap | null {
   const cells = row.map((cell) => normalizeString(toCellText(cell)));
 
-  const findCol = (keywords: string[], preferred?: string): number => {
+  const findCols = (keywords: string[], preferred?: string): number[] => {
     if (preferred) {
-      const idx = cells.findIndex((c) => c.includes(preferred));
-      if (idx >= 0) return idx;
+      const indexes = cells.flatMap((cell, index) => cell.includes(preferred) ? [index] : []);
+      if (indexes.length > 0) return indexes;
     }
-    for (const kw of keywords) {
-      const idx = cells.findIndex((c) => c.includes(kw));
-      if (idx >= 0) return idx;
-    }
-    return -1;
+    return cells.flatMap((cell, index) => keywords.some((keyword) => cell.includes(keyword)) ? [index] : []);
   };
 
-  const descriptionCol = findCol(DESCRIPTION_KEYWORDS, 'pershkrimi');
-  const unitCol = findCol(UNIT_KEYWORDS);
-  const qtyCol = findCol(QTY_KEYWORDS);
-  const priceCol = findCol(PRICE_KEYWORDS);
-  const totalCol = findCol(TOTAL_KEYWORDS);
+  const positionCol = cells.findIndex((cell) => /^(?:nr|pos|poz|numri|pozicioni)(?:\b|\.|$)/.test(cell) || cell.includes('rendor i pozicionit'));
+  const descriptionCol = findCols(DESCRIPTION_KEYWORDS, 'pershkrimi')[0] ?? findCols(DESCRIPTION_KEYWORDS)[0] ?? -1;
+  const unitCol = cells.findIndex((cell) =>
+    UNIT_KEYWORDS.some((keyword) => cell.includes(keyword)) &&
+    !PRICE_KEYWORDS.some((keyword) => cell.includes(keyword)),
+  );
+  const qtyCols = findCols(QTY_KEYWORDS);
+  const priceCols = findCols(PRICE_KEYWORDS).filter((index) => !TOTAL_KEYWORDS.some((keyword) => cells[index].includes(keyword)));
+  const totalCols = findCols(TOTAL_KEYWORDS);
+  situacionContext ||= cells.some((cell) => cell.includes('situacion') || cell.includes('situation'));
+  const qtyCol = qtyCols.length > 1 && situacionContext ? qtyCols[qtyCols.length - 1] : qtyCols[0] ?? -1;
+  const priceCol = priceCols[0] ?? -1;
+  const totalCol = totalCols.length > 1 && situacionContext ? totalCols[totalCols.length - 1] : totalCols[0] ?? -1;
 
   // sasia+cmimi janë "spina" e vërtetë e një rreshti header-i të vlefshëm. Kolona e
   // përshkrimit ndonjëherë s'e ka fjalën "përshkrimi"/"opis" fare (p.sh. disa nën-seksione e
@@ -103,29 +174,124 @@ function detectColumnMap(row: unknown[]): ColumnMap | null {
   // në vend të refuzojmë tërë rreshtin si header i pavlefshëm.
   if (qtyCol === -1 || priceCol === -1) return null;
 
-  return { descriptionCol: descriptionCol === -1 ? 1 : descriptionCol, unitCol, qtyCol, priceCol, totalCol };
+  return {
+    positionCol: positionCol === -1 ? 0 : positionCol,
+    descriptionCol: descriptionCol === -1 ? 1 : descriptionCol,
+    unitCol,
+    qtyCol,
+    priceCol,
+    totalCol,
+  };
 }
 
 function extractPositionNumber(text: string): string {
-  const match = String(text || '').match(/^\s*(?:(?:pozicioni|poz\.?)\s*)?([0-9]+(?:\.[0-9]+)*)\b/i);
-  return match ? match[1] : '';
+  const value = String(text || '').replace(/^\s*(?:pozicioni|pos\.?|poz\.?)\s*/i, '').trim();
+  const match = value.match(/^((?:[IVXLCDM]+|[0-9]+)(?:\.[0-9]+)*)(?=$|[\s.)|:-])/i);
+  if (!match) return '';
+
+  const romanRoot = match[1].split('.')[0];
+  if (/^[IVXLCDM]+$/i.test(romanRoot) && !/^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/i.test(romanRoot)) {
+    return '';
+  }
+  if (/^[IVXLCDM]+$/i.test(romanRoot) && match[1] === romanRoot && value[romanRoot.length] === '.') return '';
+  return match[1];
 }
 
-export function parseNumeric(value: unknown): number {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+function getPositionCell(row: unknown[], columnMap: ColumnMap): string {
+  const position = toCellText(row[columnMap.positionCol]);
+  if (extractPositionNumber(position)) return position;
 
+  for (let column = 0; column < columnMap.descriptionCol; column += 1) {
+    if (column === columnMap.positionCol) continue;
+    const candidate = toCellText(row[column]);
+    if (candidate.length <= 15 && extractPositionNumber(candidate)) return candidate;
+  }
+  return '';
+}
+
+function findPreviousSectionTitle(rows: unknown[][], headerIndex: number, columnMap: ColumnMap): string {
+  for (let index = headerIndex - 1; index >= Math.max(0, headerIndex - 6); index -= 1) {
+    const row = rows[index] || [];
+    for (let column = 0; column < columnMap.descriptionCol; column += 1) {
+      const code = toCellText(row[column]);
+      const heading = /^(?:([IVXLCDM]+|\d+)\.\s+)(.+)$/i.exec(code);
+      if (heading) return `${heading[1].trim().replace(/\.$/, '').toUpperCase()} ${heading[2]}`.trim();
+      if (!/^(?:[IVXLCDM]+|\d+|[A-Z])$/i.test(code)) continue;
+      const title = row
+        .map((cell, cellIndex) => cellIndex === column ? '' : toCellText(cell))
+        .find((value) => value.length > 1 && !extractPositionNumber(value));
+      if (title) return `${code.toUpperCase()} ${title}`.trim();
+    }
+  }
+  return '';
+}
+
+function hasContinuationAmounts(rows: unknown[][], rowIndex: number, columnMap: ColumnMap): boolean {
+  for (let index = rowIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index] || [];
+    if (isEmptyRow(row) || extractPositionNumber(getPositionCell(row, columnMap))) return false;
+    if (/^(gjithsejt|totali?|ukupno)\b/.test(normalizeString(rowText(row)))) return false;
+    if ([columnMap.qtyCol, columnMap.priceCol, columnMap.totalCol]
+      .filter((column) => column >= 0)
+      .some((column) => parseNumeric(row[column]) !== 0)) return true;
+  }
+  return false;
+}
+
+function hasFollowingPositionLine(
+  rows: unknown[][],
+  rowIndex: number,
+  columnMap: ColumnMap,
+  positionNumber: string,
+): boolean {
+  for (let index = rowIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index] || [];
+    if (isEmptyRow(row)) return false;
+    const nextPosition = extractPositionNumber(getPositionCell(row, columnMap));
+    if (!nextPosition) continue;
+    if (normalizeString(nextPosition) !== normalizeString(positionNumber)) return false;
+    return [columnMap.qtyCol, columnMap.priceCol, columnMap.totalCol]
+      .filter((column) => column >= 0)
+      .some((column) => parseNumeric(row[column]) !== 0);
+  }
+  return false;
+}
+
+function isLikelySectionTitle(value: string): boolean {
+  const text = toCellText(value);
+  const normalized = normalizeString(text);
+  return text.length > 0 &&
+    text.length <= 120 &&
+    text === text.toLocaleUpperCase() &&
+    !/^(?:gjithe?sej|totali?|ukupno|tvsh)\b/.test(normalized);
+}
+
+export type NumericParseResult = {
+  value: number;
+  issue?: string;
+};
+
+export function parseNumericWithIssue(value: unknown): NumericParseResult {
+  if (typeof value === 'number') return { value: Number.isFinite(value) ? value : 0 };
   let normalized = String(value ?? '')
     .replace(/[\s\u00a0\u202f]/g, '')
     .replace(/[€$£]/g, '');
-  if (!normalized) return 0;
+  if (!normalized) return { value: 0 };
   if (/^[+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(normalized)) {
     const plainNumber = Number(normalized);
-    return Number.isFinite(plainNumber) ? plainNumber : 0;
+    const ambiguous = /^[+-]?\d+\.\d{3}$/.test(normalized);
+    return {
+      value: Number.isFinite(plainNumber) ? plainNumber : 0,
+      issue: ambiguous ? `Formati i numrit "${String(value)}" është i paqartë (ndarës dhjetor ose mijëshe); verifikoje.` : undefined,
+    };
   }
 
-  if (!/^[+-]?\d[\d.,]*$/.test(normalized)) return 0;
+  if (!/^[+-]?\d[\d.,]*$/.test(normalized)) {
+    return { value: 0, issue: `Vlera numerike nuk u lexua ("${String(value)}").` };
+  }
   const lastComma = normalized.lastIndexOf(',');
   const lastDot = normalized.lastIndexOf('.');
+  let ambiguous = false;
 
   if (lastComma >= 0 && lastDot >= 0) {
     const decimalSeparator = lastComma > lastDot ? ',' : '.';
@@ -146,13 +312,24 @@ export function parseNumeric(value: unknown): number {
           normalized = `${segments.join('')}.${decimal}`;
         }
       } else {
+        ambiguous = segments[1]?.length === 3;
         normalized = normalized.replace(separator, '.');
       }
     }
   }
 
   const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (!Number.isFinite(parsed)) {
+    return { value: 0, issue: `Vlera numerike nuk u lexua ("${String(value)}").` };
+  }
+  return {
+    value: parsed,
+    issue: ambiguous ? `Formati i numrit "${String(value)}" është i paqartë (ndarës dhjetor ose mijëshe); verifikoje.` : undefined,
+  };
+}
+
+export function parseNumeric(value: unknown): number {
+  return parseNumericWithIssue(value).value;
 }
 
 /** Njeh një rresht si "titull i një dokumenti/tabele të re" brenda TË NJËJTIT skedar (p.sh.
@@ -163,9 +340,15 @@ export function parseNumeric(value: unknown): number {
  * të njëjtin numër rrënjë. */
 function isNewDocumentTitleRow(row: unknown[]): boolean {
   const nonEmpty = row.map((cell) => toCellText(cell)).filter((text) => text.trim() !== '');
-  if (nonEmpty.length !== 1) return false;
-  const normalized = normalizeString(nonEmpty[0]);
-  return normalized.includes('parama') && normalized.length < 60;
+  const normalized = nonEmpty.map(normalizeString);
+  const hasShortTitle = normalized.some((text) => text.includes('parama') && text.length < 120);
+  const hasHeaderTerms = normalized.some((text) =>
+    [...QTY_KEYWORDS, ...PRICE_KEYWORDS, ...TOTAL_KEYWORDS].some((keyword) => text.includes(keyword)),
+  );
+  const hasNumericValues = row.some((cell) =>
+    typeof cell === 'number' ? Number.isFinite(cell) && cell !== 0 : /^\s*\d+(?:[.,]\d+)?\s*$/.test(toCellText(cell)),
+  );
+  return hasShortTitle && nonEmpty.length <= 3 && !hasHeaderTerms && !hasNumericValues;
 }
 
 function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] {
@@ -188,24 +371,40 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
       continue;
     }
 
-    const candidateMap = detectColumnMap(row);
+    const context = rows.slice(Math.max(0, index - 3), index + 1).flatMap((cells) => cells.map(toCellText)).join(' ');
+    const candidateMap = detectColumnMap(row, /situacion|situation/i.test(context));
     if (candidateMap) {
       active = true;
       columnMap = candidateMap;
+      if (!currentSectionLabel) currentSectionLabel = findPreviousSectionTitle(rows, index, columnMap);
       continue;
     }
 
     if (!active || !columnMap) continue;
     if (isEmptyRow(row)) continue;
 
-    const positionNumber = extractPositionNumber(toCellText(row[0]));
+    const positionCell = getPositionCell(row, columnMap);
+    const positionNumber = extractPositionNumber(positionCell);
     let description = toCellText(row[columnMap.descriptionCol]);
 
-    // Rreshti i titullit të seksionit (p.sh. "II | PUNËT E DEMOLIMIT") — kolona A ka numër
-    // romak, jo arab, prandaj s'ka positionNumber. E ruajmë si kontekst për pozicionet
-    // pasuese, në vend ta hedhim poshtë.
-    if (!positionNumber && description && /^[IVXLCDM]+\s*$/i.test(toCellText(row[0]))) {
-      currentSectionLabel = `${toCellText(row[0])} ${description}`.trim();
+    const sectionHeadingMatch = /^([IVXLCDM]+|\d+)(?:\.(?=\s)|[):|-]|\s+)(.*)$/i.exec(positionCell);
+    const sectionToken = sectionHeadingMatch?.[1] || (/^(?:[IVXLCDM]+|\d+)$/i.test(positionCell) ? positionCell : '');
+    const inlineSectionTitle = sectionHeadingMatch?.[2]?.replace(/^[|:.)\-\s]+/, '').trim() || '';
+    const sectionTitle = inlineSectionTitle || description;
+    const noPositionValues = [columnMap.qtyCol, columnMap.priceCol, columnMap.totalCol]
+      .filter((column) => column >= 0)
+      .every((column) => {
+        const value = toCellText(row[column]);
+        return !value || (parseNumericWithIssue(row[column]).value === 0 && !parseNumericWithIssue(row[column]).issue);
+      });
+    const unitValue = columnMap.unitCol >= 0 ? toCellText(row[columnMap.unitCol]) : '';
+    if (positionNumber && noPositionValues && !unitValue && hasFollowingPositionLine(rows, index, columnMap, positionNumber)) {
+      continue;
+    }
+    const isRomanSection = /^[IVXLCDM]+$/i.test(positionCell) && Boolean(extractPositionNumber(positionCell));
+    const hasContinuation = /^\d+$/.test(positionCell) && noPositionValues && hasContinuationAmounts(rows, index, columnMap);
+    if (sectionToken && sectionTitle && noPositionValues && (!unitValue || isRomanSection) && !hasContinuation) {
+      currentSectionLabel = `${sectionToken.toUpperCase()} ${sectionTitle}`.trim();
       continue;
     }
 
@@ -214,13 +413,26 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
     // Përndryshe, një pozicion i vërtetë me çmim ku përshkrimi përkon rastësisht me frazën e
     // kërkuar për nënshkrimin nuk duhet të ndalë krejt përpunimin (bug i rregulluar më parë).
     if (!positionNumber) {
+      const hasAmounts = [columnMap.qtyCol, columnMap.priceCol, columnMap.totalCol]
+        .filter((column) => column >= 0)
+        .some((column) => parseNumeric(row[column]) !== 0);
+      if (!hasAmounts && !unitValue && isLikelySectionTitle(description)) {
+        currentSectionLabel = description;
+        continue;
+      }
       if (isSignatureRow(row)) break;
       continue;
     }
 
-    let quantity = parseNumeric(row[columnMap.qtyCol]);
-    let unitPrice = parseNumeric(row[columnMap.priceCol]);
-    let explicitTotal = columnMap.totalCol >= 0 ? parseNumeric(row[columnMap.totalCol]) : 0;
+    const quantityParsed = parseNumericWithIssue(row[columnMap.qtyCol]);
+    const unitPriceParsed = parseNumericWithIssue(row[columnMap.priceCol]);
+    const totalParsed = columnMap.totalCol >= 0 ? parseNumericWithIssue(row[columnMap.totalCol]) : { value: 0 };
+    let quantity = quantityParsed.value;
+    let unitPrice = unitPriceParsed.value;
+    let explicitTotal = totalParsed.value;
+    const rowIssues = [quantityParsed.issue, unitPriceParsed.issue, totalParsed.issue].filter((issue): issue is string => Boolean(issue));
+    const sourceRow = index + 1;
+    let consumedContinuations = 0;
 
     // Disa paramasa reale e ndajnë një pozicion në disa rreshta: rreshti i parë ka numrin dhe
     // përshkrimin e përgjithshëm por PA sasi/çmim (të gjitha 0), dhe rreshtat TJERË (pa numër
@@ -230,12 +442,13 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
     if (quantity === 0 && unitPrice === 0 && explicitTotal === 0) {
       let consumed = 0;
       let mergedTotal = 0;
+      let mergedQuantity = 0;
       const extraDescriptions: string[] = [];
 
       for (let lookahead = index + 1; lookahead < rows.length; lookahead += 1) {
         const nextRow = rows[lookahead] || [];
         if (isEmptyRow(nextRow)) break;
-        if (extractPositionNumber(toCellText(nextRow[0]))) break; // fillon pozicioni tjetër
+        if (extractPositionNumber(getPositionCell(nextRow, columnMap))) break; // fillon pozicioni tjetër
         if (/^(gjithsejt|totali?|ukupno)\b/.test(normalizeString(rowText(nextRow)))) break; // rresht nën-totali, jo vazhdim
 
         const nextQty = parseNumeric(nextRow[columnMap.qtyCol]);
@@ -245,6 +458,7 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
         if (nextQty === 0 && nextPrice === 0 && nextTotal === 0) break; // s'ka të dhëna, ndalo
 
         mergedTotal += nextRowTotal;
+        mergedQuantity += nextQty;
         const nextDescription = toCellText(nextRow[columnMap.descriptionCol]);
         if (nextDescription) extraDescriptions.push(nextDescription);
         consumed += 1;
@@ -252,9 +466,10 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
 
       if (consumed > 0) {
         explicitTotal = mergedTotal;
-        quantity = 1;
-        unitPrice = mergedTotal;
+        quantity = mergedTotal > 0 ? 1 : mergedQuantity;
+        unitPrice = mergedTotal > 0 ? mergedTotal : 0;
         if (extraDescriptions.length > 0) description = `${description} — ${extraDescriptions.join(', ')}`;
+        consumedContinuations = consumed;
         index += consumed; // rreshtat vazhdues janë "konsumuar", s'përpunohen përsëri veç
       }
     }
@@ -263,7 +478,25 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
       continue;
     }
 
+    const hasQuantityOrPrice = Boolean(
+      toCellText(row[columnMap.qtyCol]) || toCellText(row[columnMap.priceCol]),
+    );
+    if (!hasQuantityOrPrice && explicitTotal > 0 && !unitValue && consumedContinuations === 0) {
+      continue;
+    }
+
     const totalPrice = explicitTotal || quantity * unitPrice;
+    if (quantity < 0) rowIssues.push('Sasia është negative; kontrolloje para eksportit.');
+    if (quantity === 0 && positionNumber.includes('.')) rowIssues.push('Sasia është zero për një pozicion të numëruar; kontrolloje.');
+    if (unitPrice < 0) rowIssues.push('Çmimi për njësi është negativ; kontrolloje para eksportit.');
+    if (columnMap.unitCol >= 0 && !toCellText(row[columnMap.unitCol])) rowIssues.push('Mungon njësia matëse.');
+    if (columnMap.totalCol >= 0 && explicitTotal > 0) {
+      const expectedTotal = quantity * unitPrice;
+      const tolerance = Math.max(0.01, Math.abs(explicitTotal) * 0.005);
+      if (Math.abs(explicitTotal - expectedTotal) > tolerance) {
+        rowIssues.push(`Totali i deklaruar (${explicitTotal}) nuk përputhet me sasi × çmim (${expectedTotal.toFixed(2)}).`);
+      }
+    }
 
     parsed.push({
       position_number: positionNumber,
@@ -273,20 +506,22 @@ function parseStructuredRows(rows: unknown[][], sheetName: string): ParsedRow[] 
       unit_price: unitPrice,
       total_price: totalPrice,
       sheet_name: sheetName,
+      source_row: sourceRow,
       section_title: currentSectionLabel || undefined,
       table_index: tableIndex,
-      issues: [],
+      issues: rowIssues,
     });
   }
 
   return parsed;
 }
 
-function parseLegacyRows(rows: unknown[][], sheetName: string): ParsedRow[] {
+function parseLegacyRows(rows: unknown[][], sheetName: string, diagnostics: ImportDiagnostic[]): ParsedRow[] {
   const parsed: ParsedRow[] = [];
   let headerMap: Record<string, number> | null = null;
 
-  for (const row of rows) {
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex] || [];
     if (!headerMap) {
       const tempMap: Record<string, number> = {};
       let matchCount = 0;
@@ -311,29 +546,61 @@ function parseLegacyRows(rows: unknown[][], sheetName: string): ParsedRow[] {
         }
       });
 
-      if (matchCount >= 3) {
+      if (
+        matchCount >= 3 &&
+        typeof tempMap.description === 'number' &&
+        typeof tempMap.quantity === 'number' &&
+        typeof tempMap.price === 'number'
+      ) {
         headerMap = tempMap;
       }
       continue;
     }
 
     const description = toCellText(row[headerMap.description as number]);
-    if (!description || normalizeString(description).startsWith('gjithsejt')) continue;
+    if (!description || normalizeString(description).startsWith('gjithsejt')) {
+      const positionValue = toCellText(row[headerMap.position as number] ?? '');
+      const quantityValue = toCellText(row[headerMap.quantity as number]);
+      const priceValue = toCellText(row[headerMap.price as number]);
+      if ((positionValue || quantityValue || priceValue) && !normalizeString(rowText(row)).startsWith('totali')) {
+        diagnostics.push({
+          severity: 'warning',
+          sheet_name: sheetName,
+          row_number: rowIndex + 1,
+          message: 'Rreshti ka të dhëna por nuk u lidh me një përshkrim pozicioni.',
+        });
+      }
+      continue;
+    }
 
-    const quantity = parseNumeric(row[headerMap.quantity as number]);
-    const unitPrice = parseNumeric(row[headerMap.price as number]);
-    if (quantity <= 0) continue;
-
+    const quantityParsed = parseNumericWithIssue(row[headerMap.quantity as number]);
+    const priceParsed = parseNumericWithIssue(row[headerMap.price as number]);
+    const quantity = quantityParsed.value;
+    const unitPrice = priceParsed.value;
     const positionNumber = toCellText(row[headerMap.position as number] ?? '');
+    const hasNumericInput = Boolean(
+      toCellText(row[headerMap.quantity as number]) ||
+      toCellText(row[headerMap.price as number]) ||
+      positionNumber
+    );
+    if (!hasNumericInput) continue;
+    const rowIssues = [quantityParsed.issue, priceParsed.issue].filter((issue): issue is string => Boolean(issue));
+    if (quantity < 0) rowIssues.push('Sasia është negative; kontrolloje para eksportit.');
+    if (quantity === 0) rowIssues.push('Sasia është zero për një rresht të importuar; kontrolloje.');
+    if (unitPrice < 0) rowIssues.push('Çmimi për njësi është negativ; kontrolloje para eksportit.');
+    if (typeof headerMap.unit !== 'number' || !toCellText(row[headerMap.unit])) rowIssues.push('Mungon njësia matëse.');
+    if (!positionNumber) rowIssues.push('Numri i pozicionit mungon ose nuk u njoh.');
+
     parsed.push({
       position_number: positionNumber,
       description,
-      unit: toCellText(row[headerMap.unit as number] ?? 'copë'),
+      unit: toCellText(row[headerMap.unit as number] ?? ''),
       quantity,
       unit_price: unitPrice,
       total_price: quantity * unitPrice,
       sheet_name: sheetName,
-      issues: [],
+      source_row: rowIndex + 1,
+      issues: rowIssues,
     });
   }
 
@@ -349,7 +616,11 @@ function libriPositionsToRows(sheetName: string, meta: LibriMeta, positions: Ret
     unit_price: 0,
     total_price: 0,
     sheet_name: sheetName,
-    issues: ['Nga Libri Ndërtimor: çmimi nuk vjen nga ky skedar, duhet plotësuar/kombinuar manualisht.'],
+    source_row: position.sourceRow,
+    issues: [
+      'Nga Libri Ndërtimor: çmimi nuk vjen nga ky skedar, duhet plotësuar/kombinuar manualisht.',
+      ...position.issues,
+    ],
     measurements: position.measurements,
     libriMeta: meta,
     source: 'libri',
@@ -363,33 +634,83 @@ function libriPositionsToRows(sheetName: string, meta: LibriMeta, positions: Ret
  * SAKTËSISHT "totali" (me ose pa ":"), jo thjesht fjala "total" diku brenda një fjalie —
  * kjo e bën të sigurt kundër "false positive"-ve, ndryshe nga gabimi i mëparshëm.
  */
-function detectDeclaredTotal(rows: unknown[][]): number | null {
+function detectDeclaredTotal(rows: unknown[][], preferredTotalCol = -1): number | null {
+  const subtotals: number[] = [];
+  const totals: number[] = [];
+
   for (const row of rows) {
     if (!row || row.length === 0) continue;
-    const matchIndex = row.findIndex((cell) => /^(totali?|ukupno)\s*:?$/.test(normalizeString(toCellText(cell))));
+    const matchIndex = row.findIndex((cell) => {
+      const label = normalizeString(toCellText(cell)).replace(/:$/, '').trim();
+      return /^(?:gjithe?sej|nen\s*totali|subtotal|sub\s*total)$/.test(label) ||
+        /^(?:totali?|ukupno)$/.test(label);
+    });
     if (matchIndex === -1) continue;
 
-    const numericValues = row
-      .map((cell) => (typeof cell === 'number' ? cell : null))
-      .filter((v): v is number => v !== null && v > 0);
+    const label = normalizeString(toCellText(row[matchIndex])).replace(/:$/, '').trim();
+    const preferredValue = preferredTotalCol >= 0
+      ? parseNumericWithIssue(row[preferredTotalCol])
+      : { value: 0 };
+    let total = preferredValue.value > 0 && !preferredValue.issue ? preferredValue.value : 0;
 
-    if (numericValues.length > 0) {
-      return Math.max(...numericValues);
+    if (total === 0) {
+      for (let index = matchIndex + 1; index < row.length; index += 1) {
+        const value = toCellText(row[index]);
+        if (!value) continue;
+        const parsedValue = parseNumericWithIssue(row[index]);
+        if (!parsedValue.issue && parsedValue.value > 0) total = parsedValue.value;
+        break;
+      }
     }
+
+    if (total === 0) continue;
+    if (/^(?:gjithe?sej|nen\s*totali|subtotal|sub\s*total)$/.test(label)) subtotals.push(total);
+    else totals.push(total);
   }
-  return null;
+
+  return subtotals[subtotals.length - 1] ?? totals[totals.length - 1] ?? null;
+}
+
+function findDeclaredTotalColumn(rows: unknown[][]): number {
+  let totalCol = -1;
+  for (let index = 0; index < rows.length; index += 1) {
+    const context = rows.slice(Math.max(0, index - 3), index + 1).flatMap((cells) => cells.map(toCellText)).join(' ');
+    const columnMap = detectColumnMap(rows[index] || [], /situacion|situation/i.test(context));
+    if (columnMap?.totalCol !== undefined && columnMap.totalCol >= 0) totalCol = columnMap.totalCol;
+  }
+  return totalCol;
 }
 
 export function parseExcelWorkbook(workbook: XLSX.WorkBook): ParseExcelResult {
   const rows: ParsedRow[] = [];
+  const diagnostics: ImportDiagnostic[] = [];
+  const suggestedMeta: WorkbookMetadataSuggestions = {};
   let declaredTotal: number | null = null;
 
   workbook.SheetNames.forEach((sheetName) => {
     const worksheet = workbook.Sheets[sheetName];
     const jsonData = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: null });
+    const sheetMeta = extractWorkbookMetadata(jsonData);
+    Object.entries(sheetMeta).forEach(([key, value]) => {
+      if (!suggestedMeta[key as keyof WorkbookMetadataSuggestions] && value) {
+        suggestedMeta[key as keyof WorkbookMetadataSuggestions] = value;
+      }
+    });
 
     if (isLibriNdertimorSheet(jsonData)) {
-      const { meta, positions } = parseLibriSheet(jsonData, sheetName);
+      const { meta, positions, issues } = parseLibriSheet(jsonData, sheetName);
+      suggestedMeta.executorName ||= meta.executorName;
+      suggestedMeta.month ||= meta.month;
+      suggestedMeta.objectName ||= meta.objectName;
+      suggestedMeta.offerAccount ||= meta.sectionCode || meta.offerAccount;
+      suggestedMeta.offerPositions ||= meta.offerPositions;
+      suggestedMeta.sectionTitle ||= meta.sectionTitle;
+      diagnostics.push(...issues.map((issue) => ({
+        severity: 'warning' as const,
+        sheet_name: sheetName,
+        row_number: issue.rowNumber,
+        message: issue.message,
+      })));
       if (positions.length > 0) {
         rows.push(...libriPositionsToRows(sheetName, meta, positions).map((row) => ({ ...row, source: 'libri' as const })));
         return;
@@ -399,21 +720,49 @@ export function parseExcelWorkbook(workbook: XLSX.WorkBook): ParseExcelResult {
     const structuredRows = parseStructuredRows(jsonData, sheetName);
     if (structuredRows.length > 0) {
       rows.push(...structuredRows.map((row) => ({ ...row, source: 'paramasa' as const })));
-      const sheetDeclaredTotal = detectDeclaredTotal(jsonData);
+      suggestedMeta.sectionTitle ||= structuredRows.find((row) => row.section_title)?.section_title;
+      const sheetDeclaredTotal = detectDeclaredTotal(jsonData, findDeclaredTotalColumn(jsonData));
       if (sheetDeclaredTotal !== null) declaredTotal = (declaredTotal || 0) + sheetDeclaredTotal;
       return;
     }
 
-    rows.push(...parseLegacyRows(jsonData, sheetName).map((row) => ({ ...row, source: 'paramasa' as const })));
+    rows.push(...parseLegacyRows(jsonData, sheetName, diagnostics).map((row) => ({ ...row, source: 'paramasa' as const })));
   });
 
-  return { rows, declaredTotal };
+  const seenPositions = new Set<string>();
+  rows.forEach((row) => {
+    const positionNumber = toCellText(row.position_number);
+    if (!positionNumber) return;
+    const key = [
+      row.sheet_name || '',
+      row.table_index ?? 0,
+      normalizeString(row.section_title || ''),
+      normalizeString(positionNumber),
+    ].join('|');
+    if (seenPositions.has(key)) {
+      diagnostics.push({
+        severity: 'warning',
+        sheet_name: row.sheet_name || '',
+        row_number: row.source_row,
+        message: `Numri i pozicionit "${positionNumber}" përsëritet brenda të njëjtit seksion/tabelë; verifiko dublikatën.`,
+      });
+    } else {
+      seenPositions.add(key);
+    }
+  });
+
+  const parsedPositions = [...new Set(rows.map((row) => row.position_number).filter(Boolean))].slice(0, 8);
+  if (parsedPositions.length > 0) suggestedMeta.offerPositions = parsedPositions.join(', ');
+  suggestedMeta.sectionTitle ||= rows.find((row) => row.section_title)?.section_title;
+  return { rows, declaredTotal, diagnostics, suggestedMeta };
 }
 
 export type ParseExcelResult = {
   rows: ParsedRow[];
   /** Totali që vetë skedari e pretendon (nëse ka rresht "TOTALI :"), për kontroll sigurie. */
   declaredTotal: number | null;
+  diagnostics: ImportDiagnostic[];
+  suggestedMeta: WorkbookMetadataSuggestions;
 };
 
 /** Njësoj si parseExcel, por kthen edhe totalin e deklaruar nga vetë skedari, për verifikim. */

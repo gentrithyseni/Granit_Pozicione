@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 const services = [
-  { icon: Building2, title: 'Ndërtim & Infrastrukturë Rrugore', text: 'Planifikim dhe realizim i punëve ndërtimore me fokus në kontroll, afate dhe cilësi.' },
+  { icon: Building2, title: 'Ndërtim & Renovim', text: 'Planifikim dhe realizim i punëve ndërtimore me fokus në kontroll, afate dhe cilësi.' },
   { icon: ClipboardCheck, title: 'Menaxhim i Paramasave', text: 'Strukturim i pozicioneve, Librit të Masave dhe dokumentacionit teknik në një rrjedhë të qartë.' },
   { icon: Droplets, title: 'Ujësjellës & Kanalizime Civile', text: 'Zgjidhje të koordinuara për rrjete civile dhe punë infrastrukturore të matshme.' },
   { icon: Calculator, title: 'Analizë Çmimesh & Pozicionesh', text: 'Kalkulim i kostove, krahasim historik dhe vendimmarrje e mbështetur në të dhëna.' },
